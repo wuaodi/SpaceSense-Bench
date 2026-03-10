@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """
-将AirSim采集的卫星数据转换为YOLO格式
-只处理图像数据（RGB + 语义分割标注）
-支持多进程并行转换
+Convert AirSim satellite data to YOLO format.
+Generates bounding boxes from semantic segmentation masks.
+Supports multi-process parallel conversion.
+
+Usage:
+  python airsim_to_yolo.py --raw-data /path/to/raw_data --output ./yolo_output
+  python airsim_to_yolo.py --raw-data /path/to/raw_data --serial
+  python airsim_to_yolo.py --raw-data /path/to/raw_data --workers 8
 """
 import os
 import json
@@ -19,522 +24,361 @@ import argparse
 RAW_DATA_ROOT = None
 OUTPUT_ROOT = None
 
-# 语义标签颜色到类别ID的映射（RGB格式）
+# RGB color -> class ID mapping (YOLO classes start from 0)
 COLOR_TO_CLASS = {
-    # main_body - 类别0
+    # main_body - class 0
     (156, 198, 23): 0, (68, 218, 116): 0, (11, 236, 9): 0, (0, 53, 65): 0,
-    # solar_panel - 类别1
+    # solar_panel - class 1
     (146, 52, 70): 1, (194, 39, 7): 1, (211, 80, 208): 1, (189, 135, 188): 1,
-    # dish_antenna - 类别2
+    # dish_antenna - class 2
     (124, 21, 123): 2, (90, 162, 242): 2, (35, 196, 244): 2, (220, 163, 49): 2,
-    # omni_antenna - 类别3
+    # omni_antenna - class 3
     (86, 254, 214): 3, (125, 75, 48): 3, (85, 152, 34): 3, (173, 69, 31): 3,
-    # payload - 类别4
+    # payload - class 4
     (37, 128, 125): 4, (58, 19, 33): 4, (218, 124, 115): 4, (202, 97, 155): 4,
-    # thruster - 类别5
+    # thruster - class 5
     (133, 244, 133): 5, (1, 222, 192): 5, (65, 54, 217): 5, (216, 78, 75): 5,
-    # adapter_ring - 类别6
+    # adapter_ring - class 6
     (158, 114, 88): 6, (181, 213, 93): 6,
 }
 
-CLASS_NAMES = ['main_body', 'solar_panel', 'dish_antenna', 'omni_antenna', 
+CLASS_NAMES = ['main_body', 'solar_panel', 'dish_antenna', 'omni_antenna',
                'payload', 'thruster', 'adapter_ring']
 
 
 def extract_satellite_name(folder_name):
-    """从文件夹名称中提取卫星名称"""
+    """Extract satellite name from folder name (strips leading timestamp prefix)."""
     if '_' in folder_name:
         return folder_name.split('_', 1)[1]
     return folder_name
 
 
 def get_bounding_boxes_from_segmentation(seg_image):
-    """
-    从实例级分割图像中提取每个实例的边界框
-    
-    连通域检测策略：
-    - Thruster (class_id=5) 和 Payload (class_id=4)：使用连通域检测
-      因为这两类部件可能有多个空间分离的实例
-    - 其他类别：直接计算整体边界框（性能优化）
-      因为主体、太阳能板、天线等通常是单一实例
-    
-    Args:
-        seg_image: 分割图像（BGR格式）
-    
+    """Extract bounding boxes from a segmentation image.
+
+    Strategy:
+    - thruster (5) and payload (4): connected-component analysis (may have multiple instances)
+    - other classes: single bounding box over all pixels of that color
+
     Returns:
-        list of (class_id, bbox): bbox格式为 (x_center, y_center, width, height)，归一化到[0,1]
+        list of (class_id, x_center, y_center, width, height) normalized to [0, 1]
     """
-    # 转换为RGB
     seg_rgb = cv2.cvtColor(seg_image, cv2.COLOR_BGR2RGB)
     height, width = seg_rgb.shape[:2]
-    
-    # 需要连通域检测的类别
-    CONNECTED_COMPONENT_CLASSES = {4, 5}  # payload=4, thruster=5
-    
-    # 为每个颜色（实例）提取边界框
+
+    CONNECTED_COMPONENT_CLASSES = {4, 5}
     bounding_boxes = []
-    
+
     for color, class_id in COLOR_TO_CLASS.items():
-        # 创建该颜色（实例）的掩码
         mask = np.all(seg_rgb == color, axis=-1).astype(np.uint8)
-        
+
         if not np.any(mask):
-            continue  # 该实例不存在
-        
-        # 判断是否需要连通域检测
+            continue
+
         if class_id in CONNECTED_COMPONENT_CLASSES:
-            # 连通域分析：找到所有分离的区域
-            # connectivity=8 表示8连通（考虑对角线相邻）
-            num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-                mask, connectivity=8
-            )
-            
-            # 遍历每个连通域（跳过背景，从1开始）
+            num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
             for i in range(1, num_labels):
-                # 获取该连通域的统计信息
                 x = stats[i, cv2.CC_STAT_LEFT]
                 y = stats[i, cv2.CC_STAT_TOP]
                 w = stats[i, cv2.CC_STAT_WIDTH]
                 h = stats[i, cv2.CC_STAT_HEIGHT]
                 area = stats[i, cv2.CC_STAT_AREA]
-                
-                # 过滤太小的区域（面积小于10像素）
-                if area < 10:
+                if area < 10 or w < 3 or h < 3:
                     continue
-                
-                # 过滤太小的边界框（宽度或高度小于3像素）
-                if w < 3 or h < 3:
-                    continue
-                
-                # 转换为YOLO格式（归一化的中心坐标和宽高）
-                x_center = (x + w / 2) / width
-                y_center = (y + h / 2) / height
-                norm_width = w / width
-                norm_height = h / height
-                
-                bounding_boxes.append((class_id, x_center, y_center, norm_width, norm_height))
-        
+                bounding_boxes.append((
+                    class_id,
+                    (x + w / 2) / width,
+                    (y + h / 2) / height,
+                    w / width,
+                    h / height,
+                ))
         else:
-            # 其他类别：直接计算整体边界框（不做连通域检测）
             rows, cols = np.where(mask)
-            
             if len(rows) == 0:
                 continue
-            
-            # 计算最小外接矩形
             y_min, y_max = rows.min(), rows.max()
             x_min, x_max = cols.min(), cols.max()
-            
             w = x_max - x_min + 1
             h = y_max - y_min + 1
-            
-            # 过滤太小的实例
             if w * h < 10:
                 continue
-            
-            # 转换为YOLO格式（归一化的中心坐标和宽高）
-            x_center = (x_min + w / 2) / width
-            y_center = (y_min + h / 2) / height
-            norm_width = w / width
-            norm_height = h / height
-            
-            bounding_boxes.append((class_id, x_center, y_center, norm_width, norm_height))
-    
+            bounding_boxes.append((
+                class_id,
+                (x_min + w / 2) / width,
+                (y_min + h / 2) / height,
+                w / width,
+                h / height,
+            ))
+
     return bounding_boxes
 
 
 def save_yolo_annotation(bboxes, output_path):
-    """
-    保存YOLO格式的标注文件
-    
-    Args:
-        bboxes: list of (class_id, x_center, y_center, width, height)
-        output_path: 输出文件路径
-    """
+    """Save bounding boxes in YOLO label format."""
     with open(output_path, 'w') as f:
-        for class_id, x_center, y_center, width, height in bboxes:
-            f.write(f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n")
+        for class_id, x_center, y_center, w, h in bboxes:
+            f.write(f"{class_id} {x_center:.6f} {y_center:.6f} {w:.6f} {h:.6f}\n")
 
 
 def convert_satellite_data(satellite_folder, output_images, output_labels, dataset_name):
-    """
-    转换单颗卫星的数据
-    
-    Args:
-        satellite_folder: 卫星数据文件夹（可以是Path对象或字符串）
-        output_images: 输出图像目录（可以是Path对象或字符串）
-        output_labels: 输出标签目录（可以是Path对象或字符串）
-        dataset_name: 数据集名称（train或val）
-    
+    """Convert one satellite's data to YOLO format.
+
     Returns:
         (satellite_name, frame_count, error_message)
     """
-    # 确保路径是Path对象（支持多进程序列化）
     satellite_folder = Path(satellite_folder)
     output_images = Path(output_images)
     output_labels = Path(output_labels)
-    
+
     satellite_name = extract_satellite_name(satellite_folder.name)
-    
+
     try:
-        # 获取所有轨迹文件夹
         trajectory_dirs = sorted([
             d for d in satellite_folder.iterdir()
             if d.is_dir() and not d.name.startswith('trajectory')
         ])
-        
+
         if not trajectory_dirs:
             return (satellite_name, 0, None)
-        
+
         frame_count = 0
-        
-        # 遍历每条轨迹
+
         for traj_dir in trajectory_dirs:
             image_dir = traj_dir / 'image'
             seg_dir = traj_dir / 'seg'
-            
+
             if not image_dir.exists() or not seg_dir.exists():
                 continue
-            
-            # 获取所有图像文件
-            image_files = sorted(image_dir.glob('*.png'))
-            
-            for img_file in image_files:
+
+            for img_file in sorted(image_dir.glob('*.png')):
                 frame_id = img_file.stem
                 seg_file = seg_dir / f'{frame_id}.png'
-                
+
                 if not seg_file.exists():
                     continue
-                
-                # 读取分割图像
+
                 seg_image = cv2.imread(str(seg_file))
                 if seg_image is None:
                     continue
-                
-                # 提取边界框
+
                 bboxes = get_bounding_boxes_from_segmentation(seg_image)
-                
-                # 如果没有任何标注，跳过这一帧（可选）
                 if len(bboxes) == 0:
                     continue
-                
-                # 生成唯一的文件名：卫星名_轨迹名_帧ID
+
                 unique_name = f"{satellite_name}_{traj_dir.name}_{frame_id}"
-                
-                # 复制图像
-                output_img_path = output_images / f"{unique_name}.png"
-                shutil.copy2(img_file, output_img_path)
-                
-                # 保存YOLO标注
-                output_label_path = output_labels / f"{unique_name}.txt"
-                save_yolo_annotation(bboxes, output_label_path)
-                
+                shutil.copy2(img_file, output_images / f"{unique_name}.png")
+                save_yolo_annotation(bboxes, output_labels / f"{unique_name}.txt")
                 frame_count += 1
-        
+
         return (satellite_name, frame_count, None)
-    
+
     except Exception as e:
         return (satellite_name, 0, str(e))
 
 
-# =============================================================================
-# 数据集划分配置（硬编码，遵循Semantic-KITTI标准）
-# =============================================================================
-
-# 验证集（测试集）：序列 00, 10, 20, 30, ..., 130（共14个卫星）
-# 这些卫星对应Semantic-KITTI中每隔10个序列的验证集
+# Val (test) satellites: seq 00, 10, 20, ..., 130 (14 satellites)
 VAL_SATELLITES = {
-    'ACE',                                    # 00
-    'CALIPSO',                                # 10
-    'Dawn',                                   # 20
-    'ExoMars_TGO',                           # 30
-    'GRAIL',                                  # 40
-    'Integral',                               # 50
-    'LADEE',                                  # 60
-    'Lunar_Reconnaissance_Orbiter',          # 70
-    'Mercury_Magnetospheric_Orbiter',        # 80
-    'OSIRIS_REX',                            # 90
-    'Proba_2',                               # 100
-    'SOHO',                                   # 110
-    'Suomi_NPP',                             # 120
-    'Ulysses'                                 # 130
+    'ACE', 'CALIPSO', 'Dawn', 'ExoMars_TGO', 'GRAIL', 'Integral', 'LADEE',
+    'Lunar_Reconnaissance_Orbiter', 'Mercury_Magnetospheric_Orbiter',
+    'OSIRIS_REX', 'Proba_2', 'SOHO', 'Suomi_NPP', 'Ulysses'
 }
 
-# 排除的卫星：序列 131-135（不使用，保留用于未来测试）
+# Excluded satellites: seq 131-135 (reserved for future testing)
 EXCLUDED_SATELLITES = {
-    'Van_Allen_Probe',    # 131
-    'Venus_Express',      # 132
-    'Voyager',            # 133
-    'WIND',               # 134
-    'XMM_newton'          # 135
+    'Van_Allen_Probe', 'Venus_Express', 'Voyager', 'WIND', 'XMM_newton'
 }
-
-# 训练集：除上述外的其余117个卫星（序列 01-09, 11-129，排除10的倍数）
-# 自动通过排除法确定，无需显式列出
 
 
 def split_satellites_train_val(satellite_folders):
-    """
-    将卫星数据划分为训练集和验证集（遵循Semantic-KITTI标准）
-    
-    - 验证集（测试集）：序列 00, 10, 20, 30, ..., 130（每隔10个，共14个卫星）
-    - 排除：序列 131-135（不使用）
-    - 训练集：其余117个卫星
-    
-    Args:
-        satellite_folders: 所有卫星文件夹列表
-    
-    Returns:
-        (train_folders, val_folders)
-    """
-    train_folders = []
-    val_folders = []
-    excluded_folders = []
-    
+    """Split satellite folders into train and val sets."""
+    train_folders, val_folders = [], []
     for folder in satellite_folders:
         sat_name = extract_satellite_name(folder.name)
-        
         if sat_name in EXCLUDED_SATELLITES:
-            excluded_folders.append(folder)
+            pass
         elif sat_name in VAL_SATELLITES:
             val_folders.append(folder)
         else:
             train_folders.append(folder)
-    
     return train_folders, val_folders
 
 
 def process_single_satellite(args):
-    """
-    并行处理单个卫星的包装函数
-    
-    Args:
-        args: (satellite_folder, output_images, output_labels, dataset_name)
-    
-    Returns:
-        (satellite_name, frame_count, error_message)
-    """
     satellite_folder, output_images, output_labels, dataset_name = args
     return convert_satellite_data(satellite_folder, output_images, output_labels, dataset_name)
 
 
 def convert_parallel(satellite_folders, output_images, output_labels, dataset_name, max_workers=None):
-    """
-    并行转换多个卫星的数据
-    
-    Args:
-        satellite_folders: 卫星文件夹列表
-        output_images: 输出图像目录
-        output_labels: 输出标签目录
-        dataset_name: 数据集名称（train或val）
-        max_workers: 最大并行进程数
-    
-    Returns:
-        (total_frames, results)
-    """
+    """Convert multiple satellites in parallel (or serial when max_workers==1)."""
     if max_workers is None:
         max_workers = max(1, mp.cpu_count() * 2 // 3)
-    
-    # 准备任务参数
+
     tasks = [(folder, output_images, output_labels, dataset_name) for folder in satellite_folders]
-    
     results = []
     total_frames = 0
-    
+
     if max_workers == 1:
-        # 串行处理
-        for task in tqdm(tasks, desc=f"转换{dataset_name}"):
+        for task in tqdm(tasks, desc=f"Converting {dataset_name}"):
             result = process_single_satellite(task)
             results.append(result)
             total_frames += result[1]
     else:
-        # 并行处理
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            # 提交所有任务
             future_to_sat = {
                 executor.submit(process_single_satellite, task): extract_satellite_name(task[0].name)
                 for task in tasks
             }
-            
-            # 收集结果
-            with tqdm(total=len(tasks), desc=f"转换{dataset_name}") as pbar:
+            with tqdm(total=len(tasks), desc=f"Converting {dataset_name}") as pbar:
                 for future in as_completed(future_to_sat):
                     sat_name = future_to_sat[future]
                     try:
                         result = future.result()
                         results.append(result)
                         total_frames += result[1]
-                        
-                        if result[2]:  # 有错误
-                            tqdm.write(f"  ❌ {result[0]}: {result[2]}")
-                        
+                        if result[2]:
+                            tqdm.write(f"  [ERR] {result[0]}: {result[2]}")
                     except Exception as e:
-                        tqdm.write(f"  ❌ {sat_name}: {e}")
+                        tqdm.write(f"  [ERR] {sat_name}: {e}")
                         results.append((sat_name, 0, str(e)))
-                    
                     pbar.update(1)
-    
+
     return total_frames, results
 
 
 def create_yaml_config(output_root):
-    """创建YOLO的数据集配置文件"""
-    yaml_content = f"""# SpaceSense-136 YOLO Dataset Configuration
-# 数据划分遵循Semantic-KITTI标准：
-#   - 验证集（测试集）：序列 00, 10, 20, 30, ..., 130（共14个卫星）
-#   - 排除：序列 131-135（5个卫星不使用）
-#   - 训练集：其余117个卫星
+    """Create YOLO dataset YAML config file."""
+    yaml_content = f"""# SpaceSense-Bench YOLO Dataset Configuration
+# Split follows Semantic-KITTI convention:
+#   val:  seq 00, 10, 20, ..., 130 (14 satellites)
+#   excluded: seq 131-135 (5 satellites, reserved)
+#   train: remaining 117 satellites
 
 path: {str(output_root.absolute()).replace(chr(92), '/')}
 train: train/images
 val: val/images
 
-# Classes
 nc: 7
 names: ['main_body', 'solar_panel', 'dish_antenna', 'omni_antenna', 'payload', 'thruster', 'adapter_ring']
 """
-    
     yaml_path = output_root / "data.yaml"
     with open(yaml_path, 'w') as f:
         f.write(yaml_content)
-    
-    print(f"✓ YAML配置文件已保存: {yaml_path}")
+    print(f"[OK] YAML config saved: {yaml_path}")
 
 
 def main():
-    """主函数"""
-    # 解析命令行参数
     parser = argparse.ArgumentParser(
-        description='AirSim到YOLO格式转换工具（支持多进程并行）',
+        description='Convert AirSim raw data to YOLO format (parallel supported)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-示例:
+Examples:
   python airsim_to_yolo.py --raw-data /path/to/raw_data --output ./yolo_output
   python airsim_to_yolo.py --raw-data /path/to/raw_data --serial
   python airsim_to_yolo.py --raw-data /path/to/raw_data --workers 8
         """
     )
     parser.add_argument('--raw-data', type=str, required=True,
-                       help='原始数据根目录 (包含各卫星子文件夹)')
+                        help='Raw data root directory (contains satellite sub-folders)')
     parser.add_argument('--output', type=str, default='./spacesense_yolo',
-                       help='输出目录 (默认: ./spacesense_yolo)')
+                        help='Output directory (default: ./spacesense_yolo)')
     parser.add_argument('--serial', action='store_true',
-                       help='使用串行处理（默认为并行）')
+                        help='Use serial processing (default: parallel)')
     parser.add_argument('--workers', type=int, default=None,
-                       help='并行进程数（默认为CPU核心数的2/3）')
-    
+                        help='Number of parallel workers (default: 2/3 of CPU cores)')
+
     args = parser.parse_args()
-    
+
     global RAW_DATA_ROOT, OUTPUT_ROOT
     RAW_DATA_ROOT = Path(args.raw_data)
     OUTPUT_ROOT = Path(args.output)
-    
-    print("="*70)
-    print("AirSim 到 YOLO 格式转换工具（支持并行）")
-    print("="*70)
-    
+
+    print("=" * 70)
+    print("AirSim -> YOLO Conversion Tool")
+    print("=" * 70)
+
     if not RAW_DATA_ROOT.exists():
-        print(f"❌ 数据目录不存在: {RAW_DATA_ROOT}")
+        print(f"[ERR] Data directory not found: {RAW_DATA_ROOT}")
         return
-    
-    # 创建输出目录结构
+
     train_images = OUTPUT_ROOT / "train" / "images"
     train_labels = OUTPUT_ROOT / "train" / "labels"
-    val_images = OUTPUT_ROOT / "val" / "images"
-    val_labels = OUTPUT_ROOT / "val" / "labels"
-    
-    for dir_path in [train_images, train_labels, val_images, val_labels]:
-        dir_path.mkdir(parents=True, exist_ok=True)
-    
-    print(f"✓ 输出目录已创建: {OUTPUT_ROOT}")
-    
-    # 获取所有卫星文件夹
-    satellite_folders = [
-        d for d in RAW_DATA_ROOT.iterdir()
-        if d.is_dir() and not d.name.startswith('trajectory')
-    ]
-    
-    print(f"✓ 找到 {len(satellite_folders)} 个卫星数据文件夹")
-    
-    # 划分训练集和验证集（遵循Semantic-KITTI标准）
+    val_images   = OUTPUT_ROOT / "val" / "images"
+    val_labels   = OUTPUT_ROOT / "val" / "labels"
+
+    for d in [train_images, train_labels, val_images, val_labels]:
+        d.mkdir(parents=True, exist_ok=True)
+
+    print(f"[OK] Output directory: {OUTPUT_ROOT}")
+
+    # Support two directory structures:
+    #   1. raw_data/<satellite>/approach_xxx/   (flat)
+    #   2. raw_data/<satellite>/<satellite>/approach_xxx/  (HuggingFace nested)
+    raw_candidates = [d for d in RAW_DATA_ROOT.iterdir() if d.is_dir()]
+    satellite_folders = []
+    for d in raw_candidates:
+        subdirs = [s for s in d.iterdir() if s.is_dir()]
+        has_trajectory = any((s / 'image').exists() or (s / 'seg').exists() for s in subdirs)
+        if has_trajectory:
+            satellite_folders.append(d)
+        else:
+            satellite_folders.extend(subdirs)
+
+    print(f"[OK] Found {len(satellite_folders)} satellite folders")
+
     train_folders, val_folders = split_satellites_train_val(satellite_folders)
-    
-    print(f"\n数据划分（遵循Semantic-KITTI标准）:")
-    print(f"  - 训练集: {len(train_folders)} 个卫星")
-    print(f"  - 验证集: {len(val_folders)} 个卫星（序列00,10,20,...,130）")
-    print(f"  - 排除: 序列131-135不使用")
-    
-    # 确定并行进程数
+
+    print(f"\nDataset split (Semantic-KITTI convention):")
+    print(f"  train: {len(train_folders)} satellites")
+    print(f"  val:   {len(val_folders)} satellites (seq 00, 10, ..., 130)")
+    print(f"  excluded: seq 131-135 (not used)")
+
     if args.serial:
         max_workers = 1
-        print("\n✓ 使用串行处理")
+        print("\n[OK] Serial mode")
     elif args.workers is not None:
         max_workers = args.workers
-        print(f"\n✓ 使用 {max_workers} 个并行进程（用户指定）")
+        print(f"\n[OK] Using {max_workers} workers (user specified)")
     else:
-        total_satellites = len(train_folders) + len(val_folders)
-        max_workers = max(1, min(mp.cpu_count() * 2 // 3, total_satellites))
-        print(f"\n✓ CPU核心数: {mp.cpu_count()}, 使用 {max_workers} 个并行进程（核心数的2/3）")
-    
-    # 转换训练集
-    print("\n" + "="*70)
-    print("转换训练集...")
-    print("="*70)
-    
-    train_frame_count, train_results = convert_parallel(
-        train_folders, train_images, train_labels, "训练集", max_workers
-    )
-    
-    # 转换验证集
-    print("\n" + "="*70)
-    print("转换验证集...")
-    print("="*70)
-    
-    val_frame_count, val_results = convert_parallel(
-        val_folders, val_images, val_labels, "验证集", max_workers
-    )
-    
-    # 创建YAML配置文件
-    print("\n" + "="*70)
+        total = len(train_folders) + len(val_folders)
+        max_workers = max(1, min(mp.cpu_count() * 2 // 3, total))
+        print(f"\n[OK] CPU cores: {mp.cpu_count()}, using {max_workers} workers")
+
+    print("\n" + "=" * 70)
+    print("Converting train set...")
+    print("=" * 70)
+    train_count, train_results = convert_parallel(train_folders, train_images, train_labels, "train", max_workers)
+
+    print("\n" + "=" * 70)
+    print("Converting val set...")
+    print("=" * 70)
+    val_count, val_results = convert_parallel(val_folders, val_images, val_labels, "val", max_workers)
+
+    print("\n" + "=" * 70)
     create_yaml_config(OUTPUT_ROOT)
-    
-    # 统计信息
-    print("\n" + "="*70)
-    print("转换完成!")
-    print("="*70)
-    print(f"训练集: {train_frame_count} 帧 ({len(train_folders)} 个卫星)")
-    print(f"验证集: {val_frame_count} 帧 ({len(val_folders)} 个卫星)")
-    print(f"总计: {train_frame_count + val_frame_count} 帧")
-    print(f"\n数据保存在: {OUTPUT_ROOT}")
-    print(f"  - 训练图像: {train_images}")
-    print(f"  - 训练标签: {train_labels}")
-    print(f"  - 验证图像: {val_images}")
-    print(f"  - 验证标签: {val_labels}")
-    print(f"  - 配置文件: {OUTPUT_ROOT / 'data.yaml'}")
-    
-    # 显示失败的卫星
+
+    print("\n" + "=" * 70)
+    print("Done!")
+    print("=" * 70)
+    print(f"train: {train_count} frames ({len(train_folders)} satellites)")
+    print(f"val:   {val_count} frames ({len(val_folders)} satellites)")
+    print(f"total: {train_count + val_count} frames")
+    print(f"\nOutput: {OUTPUT_ROOT}")
+
     all_results = train_results + val_results
     failed = [r for r in all_results if r[2] is not None]
     if failed:
-        print(f"\n⚠️  转换失败的卫星 ({len(failed)}):")
-        for sat_name, frame_count, error in failed:
+        print(f"\n[WARN] Failed satellites ({len(failed)}):")
+        for sat_name, _, error in failed:
             print(f"  - {sat_name}: {error}")
-    
-    print("="*70)
-    
-    # 显示类别统计
-    print("\n类别信息:")
+
+    print("=" * 70)
+    print("\nClass definitions:")
     for i, name in enumerate(CLASS_NAMES):
         print(f"  {i}: {name}")
     print()
 
 
 if __name__ == "__main__":
-    # 设置随机种子以保证可复现
     random.seed(42)
-    
-    # Windows多进程需要freeze_support
     mp.freeze_support()
-    
     main()
-

@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpaceSense Data Visualizer</title>
+    <script src="https://cdn.plot.ly/plotly-2.18.0.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #2b2d31;
+            padding: 12px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #343a40;
+            color: #f8f9fa;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .header h1 {
+            font-size: 1.4em;
+            font-weight: 600;
+        }
+        
+        .header p {
+            font-size: 0.9em;
+            color: #adb5bd;
+        }
+        
+        .controls {
+            background: #f8f9fa;
+            padding: 12px 20px;
+            border-bottom: 2px solid #e9ecef;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: nowrap;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            flex: 1;
+            min-width: 140px;
+        }
+        
+        .control-group label {
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.8em;
+        }
+        
+        .control-group select {
+            padding: 7px 10px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 0.9em;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .control-group select:hover {
+            border-color: #495057;
+        }
+        
+        .control-group select:focus {
+            outline: none;
+            border-color: #495057;
+            box-shadow: 0 0 0 2px rgba(73, 80, 87, 0.15);
+        }
+
+        .nav-btn {
+            padding: 7px 18px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            align-self: flex-end;
+        }
+
+        .nav-btn-primary {
+            background: #495057;
+            color: white;
+        }
+
+        .nav-btn-primary:hover {
+            background: #343a40;
+        }
+
+        .nav-btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .info-bar {
+            background: #f1f3f5;
+            padding: 8px 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 0.85em;
+        }
+        
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .info-value {
+            color: #212529;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .views-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            padding: 10px;
+        }
+        
+        .view-panel {
+            background: #f8f9fa;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid #dee2e6;
+        }
+        
+        .view-header {
+            background: #495057;
+            color: #f8f9fa;
+            padding: 7px 12px;
+            font-weight: 600;
+            font-size: 0.85em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .view-content {
+            padding: 6px;
+            background: white;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .view-content img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            border-radius: 4px;
+            aspect-ratio: 1 / 1;
+            object-fit: contain;
+        }
+        
+        #pointcloud-container {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4px;
+            margin-top: 6px;
+            font-size: 0.8em;
+        }
+        
+        .stat-item {
+            background: #f8f9fa;
+            padding: 4px 6px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .stat-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .stat-value {
+            color: #212529;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>AirSim Raw Data Visualizer</h1>
+            </div>
+            <p>RGB | Segmentation | Depth | LiDAR Point Cloud</p>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="satellite-select">Satellite</label>
+                <select id="satellite-select">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+
+            <button class="nav-btn nav-btn-primary" id="prev-sat-btn" onclick="prevSatellite()" disabled>Prev</button>
+            <button class="nav-btn nav-btn-primary" id="next-sat-btn" onclick="nextSatellite()" disabled>Next</button>
+            
+            <div class="control-group">
+                <label for="trajectory-select">Trajectory</label>
+                <select id="trajectory-select" disabled>
+                    <option value="">Select satellite first</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="frame-select">Frame</label>
+                <select id="frame-select" disabled>
+                    <option value="">Select trajectory first</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="info-bar" id="info-bar" style="display: none;">
+            <div class="info-item">
+                <span class="info-label">Satellite:</span>
+                <span class="info-value" id="current-satellite">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Trajectory:</span>
+                <span class="info-value" id="current-trajectory">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Frame:</span>
+                <span class="info-value" id="current-frame">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Points:</span>
+                <span class="info-value" id="point-count">-</span>
+            </div>
+        </div>
+        
+        <div class="views-container">
+            <!-- RGB Image -->
+            <div class="view-panel">
+                <div class="view-header">
+                    <span>RGB Image</span>
+                </div>
+                <div class="view-content" id="rgb-content">
+                    <div class="no-data">Select satellite, trajectory and frame</div>
+                </div>
+            </div>
+            
+            <!-- Segmentation Image -->
+            <div class="view-panel">
+                <div class="view-header">
+                    <span>Segmentation</span>
+                </div>
+                <div class="view-content" id="seg-content">
+                    <div class="no-data">Select satellite, trajectory and frame</div>
+                </div>
+            </div>
+            
+            <!-- Depth Image -->
+            <div class="view-panel">
+                <div class="view-header">
+                    <span>Depth Map</span>
+                </div>
+                <div class="view-content" id="depth-content">
+                    <div class="no-data">Select satellite, trajectory and frame</div>
+                </div>
+            </div>
+            
+            <!-- Point Cloud -->
+            <div class="view-panel">
+                <div class="view-header">
+                    <span>LiDAR Point Cloud</span>
+                </div>
+                <div class="view-content">
+                    <div id="pointcloud-container">
+                        <div class="no-data">Select satellite, trajectory and frame</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSatellite = null;
+        let currentTrajectory = null;
+        let currentFrame = null;
+        let currentPlot = null;
+        let satelliteList = [];
+
+        const DEFAULT_TRAJECTORY = 'orbit_45deg_left_back';
+        const DEFAULT_FRAME_INDEX = 2; // 3rd frame (0-indexed)
+
+        async function loadSatellites() {
+            try {
+                const response = await fetch('/api/satellites');
+                const data = await response.json();
+                
+                if (data.success) {
+                    satelliteList = data.satellites;
+                    const select = document.getElementById('satellite-select');
+                    select.innerHTML = '<option value="">-- Select Satellite --</option>';
+                    
+                    data.satellites.forEach(sat => {
+                        const option = document.createElement('option');
+                        option.value = sat.id;
+                        option.textContent = sat.name;
+                        select.appendChild(option);
+                    });
+
+                    updateNavButtons();
+
+                    // Auto-select first satellite
+                    if (satelliteList.length > 0) {
+                        select.value = satelliteList[0].id;
+                        currentSatellite = satelliteList[0].id;
+                        updateNavButtons();
+                        await loadTrajectories(currentSatellite);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load satellites:', error);
+            }
+        }
+
+        function getCurrentSatelliteIndex() {
+            return satelliteList.findIndex(s => s.id === currentSatellite);
+        }
+
+        function updateNavButtons() {
+            const idx = getCurrentSatelliteIndex();
+            document.getElementById('prev-sat-btn').disabled = (idx <= 0);
+            document.getElementById('next-sat-btn').disabled = (idx < 0 || idx >= satelliteList.length - 1);
+        }
+
+        async function nextSatellite() {
+            const idx = getCurrentSatelliteIndex();
+            if (idx >= 0 && idx < satelliteList.length - 1) {
+                await selectSatelliteByIndex(idx + 1);
+            }
+        }
+
+        async function prevSatellite() {
+            const idx = getCurrentSatelliteIndex();
+            if (idx > 0) {
+                await selectSatelliteByIndex(idx - 1);
+            }
+        }
+
+        async function selectSatelliteByIndex(idx) {
+            const sat = satelliteList[idx];
+            currentSatellite = sat.id;
+            document.getElementById('satellite-select').value = sat.id;
+            updateNavButtons();
+
+            document.getElementById('trajectory-select').innerHTML = '<option value="">Loading...</option>';
+            document.getElementById('frame-select').innerHTML = '<option value="">Select trajectory first</option>';
+            document.getElementById('frame-select').disabled = true;
+
+            await loadTrajectories(currentSatellite);
+        }
+
+        async function loadTrajectories(satelliteId) {
+            try {
+                const response = await fetch(`/api/trajectories/${satelliteId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const select = document.getElementById('trajectory-select');
+                    select.innerHTML = '<option value="">-- Select Trajectory --</option>';
+                    select.disabled = false;
+                    
+                    data.trajectories.forEach(traj => {
+                        const option = document.createElement('option');
+                        option.value = traj;
+                        option.textContent = traj;
+                        select.appendChild(option);
+                    });
+                    
+                    // Prefer default trajectory, fallback to first
+                    const preferred = data.trajectories.find(t => t === DEFAULT_TRAJECTORY);
+                    const chosen = preferred || (data.trajectories.length > 0 ? data.trajectories[0] : null);
+                    if (chosen) {
+                        select.value = chosen;
+                        currentTrajectory = chosen;
+                        await loadFrames(satelliteId, currentTrajectory);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load trajectories:', error);
+            }
+        }
+
+        async function loadFrames(satelliteId, trajectoryId) {
+            try {
+                const response = await fetch(`/api/frames/${satelliteId}/${trajectoryId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const select = document.getElementById('frame-select');
+                    select.innerHTML = '<option value="">-- Select Frame --</option>';
+                    select.disabled = false;
+                    
+                    data.frames.forEach((frame, index) => {
+                        const option = document.createElement('option');
+                        option.value = frame;
+                        option.textContent = `Frame ${index + 1}: ${frame}`;
+                        select.appendChild(option);
+                    });
+                    
+                    // Use default frame index for preferred trajectory, otherwise first frame
+                    let frameIdx = 0;
+                    if (trajectoryId === DEFAULT_TRAJECTORY && data.frames.length > DEFAULT_FRAME_INDEX) {
+                        frameIdx = DEFAULT_FRAME_INDEX;
+                    }
+                    if (data.frames.length > 0) {
+                        select.value = data.frames[frameIdx];
+                        currentFrame = data.frames[frameIdx];
+                        await visualizeFrame(satelliteId, trajectoryId, currentFrame);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load frames:', error);
+            }
+        }
+
+        async function visualizeFrame(satelliteId, trajectoryId, frameId) {
+            document.getElementById('info-bar').style.display = 'flex';
+            document.getElementById('current-satellite').textContent = satelliteId.split('_').slice(1).join('_');
+            document.getElementById('current-trajectory').textContent = trajectoryId;
+            document.getElementById('current-frame').textContent = frameId;
+            
+            // Load RGB image
+            const rgbContent = document.getElementById('rgb-content');
+            rgbContent.innerHTML = '<div class="loading">Loading RGB</div>';
+            rgbContent.innerHTML = `<img src="/api/image/${satelliteId}/${trajectoryId}/${frameId}" onerror="this.parentElement.innerHTML='<div class=error>RGB image not found</div>'">`;
+            
+            // Load segmentation image
+            const segContent = document.getElementById('seg-content');
+            segContent.innerHTML = '<div class="loading">Loading Segmentation</div>';
+            segContent.innerHTML = `<img src="/api/segmentation/${satelliteId}/${trajectoryId}/${frameId}" onerror="this.parentElement.innerHTML='<div class=error>Segmentation not found</div>'">`;
+            
+            // Load depth map
+            const depthContent = document.getElementById('depth-content');
+            depthContent.innerHTML = '<div class="loading">Loading Depth</div>';
+            
+            try {
+                const depthImg = document.createElement('img');
+                depthImg.src = `/api/depth/${satelliteId}/${trajectoryId}/${frameId}`;
+                depthImg.onerror = () => {
+                    depthContent.innerHTML = '<div class="error">Depth map not found</div>';
+                };
+                
+                const statsResponse = await fetch(`/api/depth_stats/${satelliteId}/${trajectoryId}/${frameId}`);
+                const statsData = await statsResponse.json();
+                
+                if (statsData.success) {
+                    const stats = statsData.stats;
+                    depthContent.innerHTML = '';
+                    depthContent.appendChild(depthImg);
+                    
+                    const statsDiv = document.createElement('div');
+                    statsDiv.className = 'stats-grid';
+                    statsDiv.innerHTML = `
+                        <div class="stat-item">
+                            <span class="stat-label">Min Depth:</span>
+                            <span class="stat-value">${stats.min.toFixed(2)} m</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Max Depth:</span>
+                            <span class="stat-value">${stats.max.toFixed(2)} m</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Mean:</span>
+                            <span class="stat-value">${stats.mean.toFixed(2)} m</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Median:</span>
+                            <span class="stat-value">${stats.median.toFixed(2)} m</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Valid px:</span>
+                            <span class="stat-value">${stats.valid_pixels} / ${stats.total_pixels}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Valid %:</span>
+                            <span class="stat-value">${(stats.valid_ratio * 100).toFixed(1)}%</span>
+                        </div>
+                    `;
+                    depthContent.appendChild(statsDiv);
+                }
+            } catch (error) {
+                console.error('Failed to load depth:', error);
+            }
+            
+            // Load point cloud
+            try {
+                const response = await fetch(`/api/pointcloud/${satelliteId}/${trajectoryId}/${frameId}`);
+                const data = await response.json();
+                
+                if (data.success && data.points.length > 0) {
+                    document.getElementById('point-count').textContent = data.point_count;
+                    visualizePointCloud(data.points);
+                } else {
+                    document.getElementById('pointcloud-container').innerHTML = '<div class="no-data">No point cloud data</div>';
+                    document.getElementById('point-count').textContent = '0';
+                }
+            } catch (error) {
+                console.error('Failed to load point cloud:', error);
+                document.getElementById('pointcloud-container').innerHTML = '<div class="error">Point cloud load failed</div>';
+            }
+        }
+
+        function visualizePointCloud(points) {
+            const container = document.getElementById('pointcloud-container');
+            
+            if (currentPlot) {
+                Plotly.purge(container);
+                currentPlot = null;
+            }
+            
+            const x = points.map(p => p[0]);
+            const y = points.map(p => p[1]);
+            const z = points.map(p => p[2]);
+            
+            const trace = {
+                x: x, y: y, z: z,
+                mode: 'markers',
+                type: 'scatter3d',
+                marker: {
+                    size: 2,
+                    color: z,
+                    colorscale: 'Viridis',
+                    showscale: true,
+                    colorbar: {
+                        title: 'Z (m)',
+                        thickness: 15,
+                        len: 0.7
+                    }
+                }
+            };
+            
+            const layout = {
+                scene: {
+                    xaxis: { title: 'X (fwd)' },
+                    yaxis: { title: 'Y (right)', autorange: 'reversed' },
+                    zaxis: { title: 'Z (down)', autorange: 'reversed' },
+                    aspectmode: 'data',
+                    camera: {
+                        eye: { x: -2.5, y: 0, z: 0 },
+                        center: { x: 0, y: 0, z: 0 }
+                    }
+                },
+                margin: { l: 0, r: 0, t: 0, b: 0 },
+                paper_bgcolor: 'white',
+                plot_bgcolor: 'white'
+            };
+            
+            const config = {
+                responsive: true,
+                displayModeBar: true,
+                modeBarButtonsToRemove: ['toImage']
+            };
+            
+            Plotly.newPlot(container, [trace], layout, config);
+            currentPlot = container;
+        }
+
+        // Event listeners
+        document.getElementById('satellite-select').addEventListener('change', async (e) => {
+            currentSatellite = e.target.value;
+            updateNavButtons();
+            if (currentSatellite) {
+                document.getElementById('trajectory-select').innerHTML = '<option value="">Loading...</option>';
+                document.getElementById('frame-select').innerHTML = '<option value="">Select trajectory first</option>';
+                document.getElementById('frame-select').disabled = true;
+                
+                await loadTrajectories(currentSatellite);
+            }
+        });
+
+        document.getElementById('trajectory-select').addEventListener('change', async (e) => {
+            currentTrajectory = e.target.value;
+            if (currentTrajectory && currentSatellite) {
+                document.getElementById('frame-select').innerHTML = '<option value="">Loading...</option>';
+                await loadFrames(currentSatellite, currentTrajectory);
+            }
+        });
+
+        document.getElementById('frame-select').addEventListener('change', (e) => {
+            currentFrame = e.target.value;
+            if (currentFrame && currentTrajectory && currentSatellite) {
+                visualizeFrame(currentSatellite, currentTrajectory, currentFrame);
+            }
+        });
+
+        // Keyboard shortcuts: left/right arrow for prev/next satellite
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'SELECT') return;
+            if (e.key === 'ArrowRight') nextSatellite();
+            if (e.key === 'ArrowLeft') prevSatellite();
+        });
+
+        // Init
+        loadSatellites();
+    </script>
+</body>
+</html>

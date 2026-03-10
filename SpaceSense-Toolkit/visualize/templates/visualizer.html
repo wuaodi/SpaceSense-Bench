@@ -1,16 +1,12 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>点云可视化工具</title>
+    <title>Point Cloud Visualizer</title>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -21,15 +17,13 @@
             overflow: hidden;
         }
 
-        /* 星空效果 */
+        /* Starfield background */
         body::before {
             content: '';
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: 
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image:
                 radial-gradient(2px 2px at 20px 30px, white, transparent),
                 radial-gradient(2px 2px at 60px 70px, white, transparent),
                 radial-gradient(1px 1px at 50px 50px, white, transparent),
@@ -49,30 +43,7 @@
 
         @keyframes twinkle {
             0%, 100% { opacity: 0.7; }
-            50% { opacity: 1; }
-        }
-
-        /* 流星效果 */
-        body::after {
-            content: '';
-            position: fixed;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: transparent;
-            animation: shooting-star 15s linear infinite;
-            pointer-events: none;
-            z-index: -1;
-        }
-
-        @keyframes shooting-star {
-            0% {
-                background-position: 0% 0%;
-            }
-            100% {
-                background-position: 100% 100%;
-            }
+            50%       { opacity: 1; }
         }
 
         .container {
@@ -85,34 +56,22 @@
         }
 
         .header {
-            background: linear-gradient(135deg, 
-                rgba(15, 23, 42, 0.85) 0%, 
-                rgba(30, 41, 59, 0.75) 50%, 
+            background: linear-gradient(135deg,
+                rgba(15, 23, 42, 0.85) 0%,
+                rgba(30, 41, 59, 0.75) 50%,
                 rgba(15, 23, 42, 0.85) 100%);
             backdrop-filter: blur(15px) saturate(180%);
             color: white;
             padding: 30px;
             text-align: center;
             border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-            box-shadow: 
-                0 4px 30px rgba(0, 0, 0, 0.3),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 30px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
         }
 
-        .header h1 {
-            font-size: 32px;
-            margin-bottom: 10px;
-        }
+        .header h1 { font-size: 32px; margin-bottom: 10px; }
+        .header p  { font-size: 16px; opacity: 0.9; }
 
-        .header p {
-            font-size: 16px;
-            opacity: 0.9;
-        }
-
-        .content {
-            display: flex;
-            height: calc(100vh - 200px);
-        }
+        .content { display: flex; height: calc(100vh - 200px); }
 
         .sidebar {
             width: 350px;
@@ -146,12 +105,7 @@
             flex-direction: column;
         }
 
-        .view-panel h3 {
-            margin-bottom: 10px;
-            color: #333;
-            font-size: 18px;
-            text-align: center;
-        }
+        .view-panel h3 { margin-bottom: 10px; color: #333; font-size: 18px; text-align: center; }
 
         .image-container {
             flex: 1;
@@ -163,12 +117,7 @@
             overflow: hidden;
         }
 
-        .image-container img {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-            border-radius: 4px;
-        }
+        .image-container img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; }
 
         .image-info {
             text-align: center;
@@ -180,17 +129,8 @@
             margin-bottom: 8px;
         }
 
-        .control-group {
-            margin-bottom: 25px;
-        }
-
-        .control-group label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: #333;
-            font-size: 14px;
-        }
+        .control-group { margin-bottom: 25px; }
+        .control-group label { display: block; font-weight: 600; margin-bottom: 10px; color: #333; font-size: 14px; }
 
         select {
             width: 100%;
@@ -203,18 +143,9 @@
             transition: border-color 0.3s;
         }
 
-        select:hover {
-            border-color: #4a90e2;
-        }
+        select:hover, select:focus { border-color: #4a90e2; outline: none; }
 
-        select:focus {
-            outline: none;
-            border-color: #4a90e2;
-        }
-
-        .slider-container {
-            margin-top: 10px;
-        }
+        .slider-container { margin-top: 10px; }
 
         input[type="range"] {
             width: 100%;
@@ -226,12 +157,11 @@
         }
 
         input[type="range"]::-webkit-slider-thumb {
-            width: 20px;
-            height: 20px;
+            width: 20px; height: 20px;
             border-radius: 50%;
             background: #4a90e2;
             cursor: pointer;
-            box-shadow: 0 0 10px rgba(74, 144, 226, 0.5);
+            box-shadow: 0 0 10px rgba(74,144,226,0.5);
         }
 
         .frame-info {
@@ -256,26 +186,11 @@
             transition: all 0.3s;
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-            color: white;
-        }
+        .btn-primary { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(59,130,246,0.4); }
 
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(59, 130, 246, 0.4);
-        }
-
-        .btn-secondary {
-            background: linear-gradient(135deg, #374151 0%, #4b5563 100%);
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
-        }
+        .btn-secondary { background: linear-gradient(135deg, #374151 0%, #4b5563 100%); color: white; }
+        .btn-secondary:hover { background: linear-gradient(135deg, #1f2937 0%, #374151 100%); transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,0.3); }
 
         .stats {
             margin-top: 20px;
@@ -285,11 +200,7 @@
             border: 2px solid #e0e0e0;
         }
 
-        .stats h3 {
-            margin-bottom: 15px;
-            color: #333;
-            font-size: 16px;
-        }
+        .stats h3 { margin-bottom: 15px; color: #333; font-size: 16px; }
 
         .stat-item {
             display: flex;
@@ -300,124 +211,69 @@
             border-radius: 6px;
         }
 
-        .color-box {
-            width: 20px;
-            height: 20px;
-            border-radius: 4px;
-            margin-right: 10px;
-            border: 1px solid #ddd;
-        }
+        .color-box { width: 20px; height: 20px; border-radius: 4px; margin-right: 10px; border: 1px solid #ddd; }
+        .stat-label { flex: 1; font-size: 13px; font-weight: 600; }
+        .stat-count { font-size: 13px; color: #666; }
 
-        .stat-label {
-            flex: 1;
-            font-size: 13px;
-            font-weight: 600;
-        }
+        #plotDiv { width: 100%; height: 100%; min-height: 400px; }
 
-        .stat-count {
-            font-size: 13px;
-            color: #666;
-        }
-
-        #plotDiv {
-            width: 100%;
-            height: 100%;
-            min-height: 400px;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #666;
-        }
-
-        .error {
-            padding: 15px;
-            background: #f8d7da;
-            color: #721c24;
-            border-radius: 8px;
-            margin-top: 10px;
-        }
+        .loading { text-align: center; padding: 20px; color: #666; }
+        .error { padding: 15px; background: #f8d7da; color: #721c24; border-radius: 8px; margin-top: 10px; }
 
         .info-box {
             padding: 15px;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(30, 58, 138, 0.15) 100%);
+            background: linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(30,58,138,0.15) 100%);
             color: #1e40af;
             border-radius: 8px;
             margin-bottom: 20px;
             font-size: 13px;
-            border: 1px solid rgba(59, 130, 246, 0.3);
+            border: 1px solid rgba(59,130,246,0.3);
         }
 
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
+        .button-group { display: flex; gap: 10px; margin-top: 10px; }
+        .button-group button { flex: 1; padding: 10px; font-size: 14px; }
 
-        .button-group button {
-            flex: 1;
-            padding: 10px;
-            font-size: 14px;
-        }
-
-        /* 响应式设计 */
-        @media (max-width: 1400px) {
-            .view-container {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .content {
-                flex-direction: column;
-            }
-
-            .sidebar {
-                width: 100%;
-                border-right: none;
-                border-bottom: 2px solid #e0e0e0;
-            }
-        }
+        @media (max-width: 1400px) { .view-container { grid-template-columns: 1fr; } }
+        @media (max-width: 768px)  { .content { flex-direction: column; } .sidebar { width: 100%; border-right: none; border-bottom: 2px solid #e0e0e0; } }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🛰️ 卫星点云可视化工具</h1>
-            <p>交互式 3D 点云数据浏览器</p>
+            <h1>🛰️ Satellite Point Cloud Visualizer</h1>
+            <p>Interactive 3D point cloud browser — SpaceSense-Bench</p>
         </div>
 
         <div class="content">
             <div class="sidebar">
                 <div class="info-box">
-                    💡 选择卫星后将自动显示第一帧数据
+                    💡 The first frame loads automatically after selecting a satellite.
                 </div>
 
                 <div class="control-group">
-                    <label>🛰️ 选择卫星 (Sequence)</label>
+                    <label>🛰️ Select Satellite (Sequence)</label>
                     <select id="satelliteSelect" onchange="onSatelliteChange()">
-                        <option value="">-- 请选择 --</option>
+                        <option value="">-- Select --</option>
                     </select>
                 </div>
 
                 <div class="control-group">
-                    <label>🎞️ 选择帧</label>
+                    <label>🎞️ Select Frame</label>
                     <div class="frame-info" id="frameInfo">0 / 0</div>
                     <div class="slider-container">
-                        <input type="range" id="frameSlider" min="0" max="0" value="0" 
-                               oninput="updateFrameInfo()" 
+                        <input type="range" id="frameSlider" min="0" max="0" value="0"
+                               oninput="updateFrameInfo()"
                                onchange="onFrameSliderChange()">
                     </div>
                 </div>
-                
+
                 <div class="button-group">
-                    <button class="btn-secondary" onclick="previousFrame()">⬅️ 上一帧</button>
-                    <button class="btn-secondary" onclick="nextFrame()">下一帧 ➡️</button>
+                    <button class="btn-secondary" onclick="previousFrame()">⬅️ Prev</button>
+                    <button class="btn-secondary" onclick="nextFrame()">Next ➡️</button>
                 </div>
 
                 <div class="stats" id="statsPanel" style="display: none;">
-                    <h3>📊 统计信息</h3>
+                    <h3>📊 Statistics</h3>
                     <div id="statsContent"></div>
                 </div>
             </div>
@@ -425,15 +281,15 @@
             <div class="main-view">
                 <div class="view-container">
                     <div class="view-panel">
-                        <h3>📷 相机图像 (Image)</h3>
+                        <h3>📷 Camera Image</h3>
                         <div class="image-container" id="imageContainer">
-                            <div class="loading" style="color: #999;">请选择数据并点击"显示点云"</div>
+                            <div class="loading" style="color: #999;">Select a satellite to begin</div>
                         </div>
                     </div>
                     <div class="view-panel">
-                        <h3>☁️ 3D 点云 (Point Cloud)</h3>
+                        <h3>☁️ 3D Point Cloud</h3>
                         <div id="plotDiv" style="flex: 1;">
-                            <div class="loading" style="color: #999; padding-top: 100px;">请选择数据并点击"显示点云"</div>
+                            <div class="loading" style="color: #999; padding-top: 100px;">Select a satellite to begin</div>
                         </div>
                     </div>
                 </div>
@@ -448,10 +304,7 @@
         let currentSatelliteName = '';
         let currentFrameIndex = 0;
 
-        // 页面加载时获取卫星列表
-        window.onload = function() {
-            loadSatellites();
-        };
+        window.onload = function() { loadSatellites(); };
 
         async function loadSatellites() {
             try {
@@ -462,27 +315,24 @@
                     const select = document.getElementById('satelliteSelect');
                     satellites.forEach(sat => {
                         const option = document.createElement('option');
-                        option.value = sat.id;  // 使用序号作为value
-                        option.textContent = `${sat.id} - ${sat.name}`;  // 显示 "序号 - 卫星名"
+                        option.value = sat.id;
+                        option.textContent = `${sat.id} - ${sat.name}`;
                         select.appendChild(option);
                     });
                 }
             } catch (error) {
-                console.error('加载卫星列表失败:', error);
+                console.error('Failed to load satellites:', error);
             }
         }
 
         async function onSatelliteChange() {
             const select = document.getElementById('satelliteSelect');
             currentSequenceId = select.value;
-            
             if (!currentSequenceId) return;
 
-            // 找到对应的卫星名称
             const sat = satellites.find(s => s.id === currentSequenceId);
             currentSatelliteName = sat ? sat.name : currentSequenceId;
 
-            // 重置帧列表
             frames = [];
             updateFrameInfo();
 
@@ -492,48 +342,31 @@
                 if (data.success) {
                     frames = data.frames;
                     currentFrameIndex = 0;
-                    
                     const slider = document.getElementById('frameSlider');
                     slider.max = frames.length - 1;
                     slider.value = 0;
-                    
                     updateFrameInfo();
-                    
-                    // 自动加载第一帧
-                    if (frames.length > 0) {
-                        loadPointCloud();
-                    }
+                    if (frames.length > 0) loadPointCloud();
                 }
             } catch (error) {
-                console.error('加载帧列表失败:', error);
+                console.error('Failed to load frames:', error);
             }
-        }
-
-        // 移除轨迹选择功能（已不需要）
-        async function onTrajectoryChange() {
-            // 不再使用
         }
 
         function onFrameSliderChange() {
             const slider = document.getElementById('frameSlider');
             currentFrameIndex = parseInt(slider.value);
             updateFrameInfo();
-            
-            // 自动加载当前帧
-            if (frames.length > 0) {
-                loadPointCloud();
-            }
+            if (frames.length > 0) loadPointCloud();
         }
 
         function updateFrameInfo() {
             const slider = document.getElementById('frameSlider');
             const index = parseInt(slider.value);
             const info = document.getElementById('frameInfo');
-            if (frames.length > 0) {
-                info.textContent = `${index + 1} / ${frames.length} - ${frames[index]}`;
-            } else {
-                info.textContent = '0 / 0';
-            }
+            info.textContent = frames.length > 0
+                ? `${index + 1} / ${frames.length} — ${frames[index]}`
+                : '0 / 0';
         }
 
         function previousFrame() {
@@ -560,167 +393,123 @@
 
         async function loadPointCloud() {
             if (!currentSequenceId || frames.length === 0) {
-                alert('请先选择卫星和帧');
+                alert('Please select a satellite and frame first');
                 return;
             }
 
             const frameId = frames[currentFrameIndex];
-            
-            // 显示加载中
-            document.getElementById('plotDiv').innerHTML = 
-                '<div class="loading">⏳ 加载点云数据中...</div>';
-            document.getElementById('imageContainer').innerHTML = 
-                '<div class="loading">⏳ 加载图像中...</div>';
+
+            document.getElementById('plotDiv').innerHTML =
+                '<div class="loading">⏳ Loading point cloud...</div>';
+            document.getElementById('imageContainer').innerHTML =
+                '<div class="loading">⏳ Loading image...</div>';
 
             try {
-                // 加载点云数据
-                const response = await fetch(
-                    `/api/pointcloud/${currentSequenceId}/${frameId}`
-                );
+                const response = await fetch(`/api/pointcloud/${currentSequenceId}/${frameId}`);
                 const data = await response.json();
-                
+
                 if (data.success) {
                     visualizePointCloud(data);
                     updateStats(data);
                 } else {
-                    document.getElementById('plotDiv').innerHTML = 
-                        `<div class="error">❌ 加载失败: ${data.error}</div>`;
+                    document.getElementById('plotDiv').innerHTML =
+                        `<div class="error">❌ Load failed: ${data.error}</div>`;
                 }
 
-                // 加载图像
                 loadImage(frameId);
             } catch (error) {
-                document.getElementById('plotDiv').innerHTML = 
-                    `<div class="error">❌ 加载失败: ${error.message}</div>`;
+                document.getElementById('plotDiv').innerHTML =
+                    `<div class="error">❌ Load failed: ${error.message}</div>`;
             }
         }
 
         function loadImage(frameId) {
             const imageUrl = `/api/image/${currentSequenceId}/${frameId}`;
             const img = new Image();
-            
+
             img.onload = function() {
-                const imageHtml = `
-                    <div style="width: 100%; height: 100%; display: flex; flex-direction: column;">
-                        <div class="image-info">分辨率: ${img.width} × ${img.height}</div>
-                        <div style="flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto;">
+                document.getElementById('imageContainer').innerHTML = `
+                    <div style="width:100%;height:100%;display:flex;flex-direction:column;">
+                        <div class="image-info">Resolution: ${img.width} × ${img.height}</div>
+                        <div style="flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;">
                             <img src="${imageUrl}" alt="Frame ${frameId}">
                         </div>
-                    </div>
-                `;
-                document.getElementById('imageContainer').innerHTML = imageHtml;
+                    </div>`;
             };
-            
+
             img.onerror = function() {
-                document.getElementById('imageContainer').innerHTML = 
-                    '<div class="error">❌ 图像加载失败或不存在</div>';
+                document.getElementById('imageContainer').innerHTML =
+                    '<div class="error">❌ Image not found</div>';
             };
-            
+
             img.src = imageUrl;
         }
 
         function visualizePointCloud(data) {
-            const points = data.points;
-            const labels = data.labels;
-            
-            // ⚠️ 关键修复: 清理旧的Plotly图表,释放WebGL上下文,防止"Too many active WebGL contexts"错误
             const plotDiv = document.getElementById('plotDiv');
-            if (plotDiv && plotDiv.data) {
-                Plotly.purge(plotDiv);
-            }
-            
-            // 从后端获取的颜色映射
+            if (plotDiv && plotDiv.data) Plotly.purge(plotDiv);
+
             const colorMap = {};
             if (data.label_stats) {
                 for (const [labelId, info] of Object.entries(data.label_stats)) {
-                    const color = info.color;
-                    colorMap[labelId] = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+                    const c = info.color;
+                    colorMap[labelId] = `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
                 }
             }
 
-            // 准备数据
-            const x = points.map(p => p[0]);
-            const y = points.map(p => p[1]);
-            const z = points.map(p => p[2]);
-            
-            let colors;
-            if (labels) {
-                colors = labels.map(l => colorMap[l] || 'rgb(128, 128, 128)');
-            } else {
-                colors = 'rgb(100, 100, 100)';
-            }
+            const x = data.points.map(p => p[0]);
+            const y = data.points.map(p => p[1]);
+            const z = data.points.map(p => p[2]);
+
+            const colors = data.labels
+                ? data.labels.map(l => colorMap[l] || 'rgb(128,128,128)')
+                : 'rgb(100,100,100)';
 
             const trace = {
                 type: 'scatter3d',
                 mode: 'markers',
-                x: x,
-                y: y,
-                z: z,
-                marker: {
-                    size: 2,
-                    color: colors,
-                    opacity: 0.8
-                },
+                x, y, z,
+                marker: { size: 2, color: colors, opacity: 0.8 },
                 hovertemplate: 'X: %{x:.2f}<br>Y: %{y:.2f}<br>Z: %{z:.2f}<extra></extra>'
             };
 
             const layout = {
-                title: `${currentSatelliteName} (Seq ${currentSequenceId}) - Frame ${currentFrameIndex + 1}/${frames.length}`,
+                title: `${currentSatelliteName} (Seq ${currentSequenceId}) — Frame ${currentFrameIndex + 1}/${frames.length}`,
                 scene: {
-                    xaxis: { 
-                        title: 'X (前)'
-                    },
-                    yaxis: { 
-                        title: 'Y (右)',
-                        autorange: 'reversed' // 反转Y轴，让正值在右
-                    },
-                    zaxis: { 
-                        title: 'Z (下)',
-                        autorange: 'reversed'  // 反转Z轴，让正值在下方
-                    },
-                    aspectmode: 'data',  // 使用cube模式确保所有点云可见
-                    camera: {
-                        eye: { x: -2.5, y: 0, z: 0 },  // 增加相机距离，从前方看向后方
-                        center: { x: 0, y: 0, z: 0 }
-                    }
+                    xaxis: { title: 'X (forward)' },
+                    yaxis: { title: 'Y (right)',   autorange: 'reversed' },
+                    zaxis: { title: 'Z (down)',    autorange: 'reversed' },
+                    aspectmode: 'data',
+                    camera: { eye: { x: -2.5, y: 0, z: 0 }, center: { x: 0, y: 0, z: 0 } }
                 },
                 margin: { l: 0, r: 0, t: 40, b: 0 },
                 paper_bgcolor: 'white',
                 plot_bgcolor: 'white'
             };
 
-            const config = {
-                responsive: true,
-                displayModeBar: true,
-                displaylogo: false
-            };
-
-            Plotly.newPlot('plotDiv', [trace], layout, config);
+            Plotly.newPlot('plotDiv', [trace], layout, { responsive: true, displayModeBar: true, displaylogo: false });
         }
 
         function updateStats(data) {
-            const statsPanel = document.getElementById('statsPanel');
+            const statsPanel   = document.getElementById('statsPanel');
             const statsContent = document.getElementById('statsContent');
-            
+
             if (data.label_stats) {
                 statsPanel.style.display = 'block';
-                
                 let html = `<div class="stat-item">
-                    <span class="stat-label">总点数</span>
+                    <span class="stat-label">Total points</span>
                     <span class="stat-count">${data.point_count}</span>
                 </div>`;
-                
+
                 for (const [labelId, info] of Object.entries(data.label_stats)) {
                     const color = `rgb(${info.color[0]}, ${info.color[1]}, ${info.color[2]})`;
-                    html += `
-                        <div class="stat-item">
-                            <div class="color-box" style="background-color: ${color}"></div>
-                            <span class="stat-label">${info.name}</span>
-                            <span class="stat-count">${info.count}</span>
-                        </div>
-                    `;
+                    html += `<div class="stat-item">
+                        <div class="color-box" style="background-color:${color}"></div>
+                        <span class="stat-label">${info.name}</span>
+                        <span class="stat-count">${info.count}</span>
+                    </div>`;
                 }
-                
+
                 statsContent.innerHTML = html;
             } else {
                 statsPanel.style.display = 'none';
@@ -729,4 +518,3 @@
     </script>
 </body>
 </html>
-

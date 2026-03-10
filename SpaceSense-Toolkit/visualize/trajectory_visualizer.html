@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spacecraft Trajectory Visualizer (FRD Frame)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'JetBrains Mono', sans-serif;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e0e0e0;
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        #container { display: flex; height: 100vh; }
+        
+        #sidebar {
+            width: 320px;
+            background: rgba(15, 15, 25, 0.95);
+            border-right: 1px solid rgba(100, 200, 255, 0.2);
+            padding: 20px;
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+        
+        /* scrollbar */
+        #sidebar::-webkit-scrollbar { width: 6px; }
+        #sidebar::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+        #sidebar::-webkit-scrollbar-thumb { background: rgba(100, 200, 255, 0.3); border-radius: 3px; }
+        
+        h1 {
+            font-size: 1.4em;
+            margin-bottom: 8px;
+            background: linear-gradient(90deg, #64c8ff, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            font-size: 0.75em;
+            color: #888;
+            margin-bottom: 20px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .coord-system-badge {
+            display: inline-block;
+            background: rgba(255, 107, 107, 0.1);
+            border: 1px solid rgba(255, 107, 107, 0.3);
+            color: #ff6b6b;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7em;
+            margin-bottom: 15px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .section { margin-bottom: 20px; }
+        
+        .section-title {
+            font-size: 0.85em;
+            color: #64c8ff;
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(100, 200, 255, 0.2);
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        
+        .traj-btn {
+            display: block;
+            width: 100%;
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(100, 200, 255, 0.15);
+            border-radius: 6px;
+            color: #ccc;
+            font-size: 0.8em;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+        
+        .traj-btn:hover {
+            background: rgba(100, 200, 255, 0.1);
+            border-color: rgba(100, 200, 255, 0.4);
+            color: #fff;
+            transform: translateX(4px);
+        }
+        
+        .traj-btn.active {
+            background: linear-gradient(90deg, rgba(100, 200, 255, 0.2), rgba(167, 139, 250, 0.2));
+            border-color: #64c8ff;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(100, 200, 255, 0.2);
+        }
+        
+        .traj-btn .count {
+            float: right;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75em;
+            color: #888;
+        }
+        
+        #canvas-container { flex: 1; position: relative; }
+        
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(15, 15, 25, 0.9);
+            border: 1px solid rgba(100, 200, 255, 0.3);
+            border-radius: 10px;
+            padding: 15px 20px;
+            backdrop-filter: blur(10px);
+            min-width: 220px;
+            z-index: 10;
+        }
+        
+        #info-panel h3 { font-size: 0.9em; color: #64c8ff; margin-bottom: 10px; }
+        
+        #info-panel .info-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+            margin-bottom: 6px;
+        }
+        
+        #info-panel .info-label { color: #888; }
+        #info-panel .info-value { font-family: 'JetBrains Mono', monospace; color: #a78bfa; }
+        
+        #controls-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 15, 25, 0.8);
+            border: 1px solid rgba(100, 200, 255, 0.2);
+            border-radius: 20px;
+            padding: 8px 20px;
+            font-size: 0.75em;
+            color: #888;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .legend {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(100, 200, 255, 0.1);
+        }
+        
+        .legend-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 8px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.75em;
+            color: #888;
+        }
+        
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            margin-right: 6px;
+        }
+
+        .axis-legend {
+            margin-top: 10px;
+            background: rgba(0,0,0,0.2);
+            padding: 8px;
+            border-radius: 4px;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .btn-action {
+            flex: 1;
+            padding: 8px;
+            background: rgba(100, 200, 255, 0.1);
+            border: 1px solid rgba(100, 200, 255, 0.3);
+            border-radius: 6px;
+            color: #64c8ff;
+            font-size: 0.75em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-action:hover { background: rgba(100, 200, 255, 0.2); }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <h1>Spacecraft Trajectory Visualizer</h1>
+            <div class="subtitle">Pose Trajectory Viewer</div>
+            <div class="coord-system-badge">FRD: Front(R) Right(G) Down(B)</div>
+            
+            <div class="btn-group">
+                <button class="btn-action" onclick="showAllApproach()">All Approach</button>
+                <button class="btn-action" onclick="showAllOrbit()">All Orbit</button>
+                <button class="btn-action" onclick="clearAll()">Clear</button>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">APPROACH TRAJECTORIES</div>
+                <div id="approach-list"></div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">ORBIT TRAJECTORIES</div>
+                <div id="orbit-list"></div>
+            </div>
+            
+            <div class="legend">
+                <div class="legend-row">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ff6b6b;"></div>
+                        <span>Start</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #51cf66;"></div>
+                        <span>End</span>
+                    </div>
+                </div>
+                <div class="axis-legend">
+                    <div class="legend-item"><span style="color:#ff4444; font-weight:bold;">X (Red)</span> — Front</div>
+                    <div class="legend-item"><span style="color:#44ff44; font-weight:bold;">Y (Green)</span> — Right</div>
+                    <div class="legend-item"><span style="color:#4444ff; font-weight:bold;">Z (Blue)</span> — Down</div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="canvas-container">
+            <div id="info-panel">
+                <h3>Current Trajectory</h3>
+                <div class="info-row">
+                    <span class="info-label">Name</span>
+                    <span class="info-value" id="info-name">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Pose Points</span>
+                    <span class="info-value" id="info-points">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Start Dist.</span>
+                    <span class="info-value" id="info-start">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">End Dist.</span>
+                    <span class="info-value" id="info-end">-</span>
+                </div>
+            </div>
+            <div id="controls-hint">Left-click: Rotate | Scroll: Zoom | Right-click: Pan</div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== Trajectory generators (FRD frame) ====================
+        
+        const APPROACH_CONFIG = { startDist: 20.0, endDist: 3.0, step: 0.1 };
+        const ORBIT_CONFIG = { radius: 20.0, angleStep: 1 };
+        
+        // Approach from back (-X)
+        function generateApproachBack() {
+            const traj = [];
+            for (let dist = APPROACH_CONFIG.startDist; dist >= APPROACH_CONFIG.endDist; dist -= APPROACH_CONFIG.step) {
+                traj.push({ x: -dist, y: 0, z: 0 });
+            }
+            return traj;
+        }
+        
+        // Approach from left (-Y)
+        function generateApproachLeft() {
+            const traj = [];
+            for (let dist = APPROACH_CONFIG.startDist; dist >= APPROACH_CONFIG.endDist; dist -= APPROACH_CONFIG.step) {
+                traj.push({ x: 0, y: -dist, z: 0 });
+            }
+            return traj;
+        }
+        
+        // Approach from right (+Y)
+        function generateApproachRight() {
+            const traj = [];
+            for (let dist = APPROACH_CONFIG.startDist; dist >= APPROACH_CONFIG.endDist; dist -= APPROACH_CONFIG.step) {
+                traj.push({ x: 0, y: dist, z: 0 });
+            }
+            return traj;
+        }
+        
+        // Approach from front (+X)
+        function generateApproachFront() {
+            const traj = [];
+            for (let dist = APPROACH_CONFIG.startDist; dist >= APPROACH_CONFIG.endDist; dist -= APPROACH_CONFIG.step) {
+                traj.push({ x: dist, y: 0, z: 0 });
+            }
+            return traj;
+        }
+        
+        // Approach from top (-Z)
+        function generateApproachTop() {
+            const traj = [];
+            for (let dist = APPROACH_CONFIG.startDist; dist >= APPROACH_CONFIG.endDist; dist -= APPROACH_CONFIG.step) {
+                traj.push({ x: 0, y: 0, z: -dist });
+            }
+            return traj;
+        }
+        
+        // Approach from bottom (+Z)
+        function generateApproachBottom() {
+            const traj = [];
+            for (let dist = APPROACH_CONFIG.startDist; dist >= APPROACH_CONFIG.endDist; dist -= APPROACH_CONFIG.step) {
+                traj.push({ x: 0, y: 0, z: dist });
+            }
+            return traj;
+        }
+        
+        function generateApproach45(xSign, ySign, zSign) {
+            const traj = [];
+            for (let dist = APPROACH_CONFIG.startDist; dist >= APPROACH_CONFIG.endDist; dist -= APPROACH_CONFIG.step) {
+                const comp = dist / Math.sqrt(2); 
+                traj.push({ x: xSign * comp, y: ySign * comp, z: zSign * comp });
+            }
+            return traj;
+        }
+        
+        function generateApproachBackTop45() { return generateApproach45(-1, 0, -1); }
+        function generateApproachLeftTop45() { return generateApproach45(0, -1, -1); }
+        function generateApproachRightTop45() { return generateApproach45(0, 1, -1); }
+        function generateApproachFrontTop45() { return generateApproach45(1, 0, -1); }
+        function generateApproachBackBottom45() { return generateApproach45(-1, 0, 1); }
+        function generateApproachLeftBottom45() { return generateApproach45(0, -1, 1); }
+        function generateApproachRightBottom45() { return generateApproach45(0, 1, 1); }
+        function generateApproachFrontBottom45() { return generateApproach45(1, 0, 1); }
+        
+        function generateApproachYaw(zSign, yawDeg) {
+            const traj = [];
+            const yawRad = yawDeg * Math.PI / 180;
+            for (let dist = APPROACH_CONFIG.startDist; dist >= APPROACH_CONFIG.endDist; dist -= APPROACH_CONFIG.step) {
+                const h = dist / Math.sqrt(2);
+                const v = dist / Math.sqrt(2);
+                traj.push({
+                    x: h * Math.cos(yawRad),
+                    y: h * Math.sin(yawRad),
+                    z: zSign * v
+                });
+            }
+            return traj;
+        }
+        
+        
+        function generateApproachTopYaw45() { return generateApproachYaw(-1, 45); }
+        function generateApproachTopYaw135() { return generateApproachYaw(-1, 135); }
+        function generateApproachTopYaw225() { return generateApproachYaw(-1, 225); }
+        function generateApproachTopYaw315() { return generateApproachYaw(-1, 315); }
+        function generateApproachBottomYaw45() { return generateApproachYaw(1, 45); }
+        function generateApproachBottomYaw135() { return generateApproachYaw(1, 135); }
+        function generateApproachBottomYaw225() { return generateApproachYaw(1, 225); }
+        function generateApproachBottomYaw315() { return generateApproachYaw(1, 315); }
+        
+        // Orbit trajectories
+        function generateOrbitXZ() {
+            const traj = [];
+            const r = ORBIT_CONFIG.radius;
+            // XZ plane orbit: Y=0
+            for (let deg = 0; deg <= 360; deg += ORBIT_CONFIG.angleStep) {
+                const rad = deg * Math.PI / 180;
+                traj.push({
+                    x: -r * Math.cos(rad),
+                    y: 0,
+                    z: -r * Math.sin(rad)
+                });
+            }
+            return traj;
+        }
+        
+        function generateOrbitXY() {
+            const traj = [];
+            const r = ORBIT_CONFIG.radius;
+            // XY plane orbit: Z=0
+            for (let deg = 0; deg <= 360; deg += ORBIT_CONFIG.angleStep) {
+                const rad = deg * Math.PI / 180;
+                traj.push({
+                    x: -r * Math.cos(rad),
+                    y: -r * Math.sin(rad),
+                    z: 0
+                });
+            }
+            return traj;
+        }
+        
+        function generateOrbitYZ() {
+            const traj = [];
+            const r = ORBIT_CONFIG.radius;
+            // YZ plane orbit: X=0
+            for (let deg = 0; deg <= 360; deg += ORBIT_CONFIG.angleStep) {
+                const rad = deg * Math.PI / 180;
+                traj.push({
+                    x: 0,
+                    y: -r * Math.cos(rad),
+                    z: -r * Math.sin(rad)
+                });
+            }
+            return traj;
+        }
+        
+        function generateOrbit45LeftBack() {
+            const traj = [];
+            const r = ORBIT_CONFIG.radius;
+            const startAngle = -45 * Math.PI / 180;
+            for (let deg = 0; deg <= 360; deg += ORBIT_CONFIG.angleStep) {
+                const rad = deg * Math.PI / 180;
+                const rHoriz = r * Math.cos(rad);
+                const z = -r * Math.sin(rad);
+                const x = rHoriz * Math.cos(startAngle);
+                const y = rHoriz * Math.sin(startAngle);
+                traj.push({ x, y, z });
+            }
+            return traj;
+        }
+        
+        function generateOrbit45RightBack() {
+            const traj = [];
+            const r = ORBIT_CONFIG.radius;
+            const startAngle = 45 * Math.PI / 180;
+            for (let deg = 0; deg <= 360; deg += ORBIT_CONFIG.angleStep) {
+                const rad = deg * Math.PI / 180;
+                const rHoriz = r * Math.cos(rad);
+                const z = -r * Math.sin(rad);
+                const x = rHoriz * Math.cos(startAngle);
+                const y = rHoriz * Math.sin(startAngle);
+                traj.push({ x, y, z });
+            }
+            return traj;
+        }
+        
+        const TRAJECTORIES = {
+            approach: [
+                { key: 'approach_back', name: 'Back (-X)', gen: generateApproachBack },
+                { key: 'approach_left', name: 'Left (-Y)', gen: generateApproachLeft },
+                { key: 'approach_right', name: 'Right (+Y)', gen: generateApproachRight },
+                { key: 'approach_front', name: 'Front (+X)', gen: generateApproachFront },
+                { key: 'approach_top', name: 'Top (-Z)', gen: generateApproachTop },
+                { key: 'approach_bottom', name: 'Bottom (+Z)', gen: generateApproachBottom },
+                { key: 'approach_back_top_45', name: 'Back-Top 45°', gen: generateApproachBackTop45 },
+                { key: 'approach_left_top_45', name: 'Left-Top 45°', gen: generateApproachLeftTop45 },
+                { key: 'approach_right_top_45', name: 'Right-Top 45°', gen: generateApproachRightTop45 },
+                { key: 'approach_front_top_45', name: 'Front-Top 45°', gen: generateApproachFrontTop45 },
+                { key: 'approach_back_bottom_45', name: 'Back-Bottom 45°', gen: generateApproachBackBottom45 },
+                { key: 'approach_left_bottom_45', name: 'Left-Bottom 45°', gen: generateApproachLeftBottom45 },
+                { key: 'approach_right_bottom_45', name: 'Right-Bottom 45°', gen: generateApproachRightBottom45 },
+                { key: 'approach_front_bottom_45', name: 'Front-Bottom 45°', gen: generateApproachFrontBottom45 },
+                { key: 'approach_top_yaw45', name: 'Top (p-45° y45°)', gen: generateApproachTopYaw45 },
+                { key: 'approach_bottom_yaw45', name: 'Bottom (p45° y45°)', gen: generateApproachBottomYaw45 },
+            ],
+            orbit: [
+                { key: 'orbit_xz', name: 'XZ Plane Orbit', gen: generateOrbitXZ },
+                { key: 'orbit_xy', name: 'XY Plane Orbit', gen: generateOrbitXY },
+                { key: 'orbit_yz', name: 'YZ Plane Orbit', gen: generateOrbitYZ },
+                { key: 'orbit_45deg_left_back', name: '45° Left-Back Orbit', gen: generateOrbit45LeftBack },
+                { key: 'orbit_45deg_right_back', name: '45° Right-Back Orbit', gen: generateOrbit45RightBack },
+            ]
+        };
+        
+        // ==================== Three.js Scene ====================
+        
+        let scene, camera, renderer, controls;
+        let trajectoryGroup;
+        let activeTrajectories = new Map();
+        let animationData = new Map(); // key -> { points, progress, type, speed, movingSphere, trailMesh }
+        
+        // Color palette
+        const COLORS = {
+            approach: [
+                0x64c8ff, 0x5eb8f0, 0x58a8e0, 0x5298d0, 0x4c88c0, 0x4678b0,
+                0x4068a0, 0x3a5890, 0x344880, 0x2e3870, 0x282860, 0x221850,
+                0xff9f43, 0xffa94d, 0xffb357, 0xffbd61, 0xffc76b, 0xffd175
+            ],
+            orbit: [0xa78bfa, 0xc084fc, 0x22d3ee, 0xe879f9, 0xf472b6]
+        };
+        
+        function init() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0f);
+            
+            camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.up.set(0, 0, -1); // -Z is up in FRD
+            camera.position.set(-30, -20, -30);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+            
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+            
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(-10, -20, -50);
+            scene.add(dirLight);
+            
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.update();
+            
+            trajectoryGroup = new THREE.Group();
+            scene.add(trajectoryGroup);
+            
+            addHelpers();
+            addTargetSatellite();
+            generateButtons();
+            
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+        
+        function addHelpers() {
+            const axesHelper = new THREE.AxesHelper(25);
+            scene.add(axesHelper);
+            
+            const grid = new THREE.GridHelper(50, 50, 0x1a3a5a, 0x0a1a2a);
+            grid.rotation.x = Math.PI / 2;
+            scene.add(grid);
+            
+            const labelGeom = new THREE.SphereGeometry(0.3, 16, 16);
+            
+            const xLabel = new THREE.Mesh(labelGeom, new THREE.MeshBasicMaterial({ color: 0xff4444 }));
+            xLabel.position.set(26, 0, 0);
+            scene.add(xLabel);
+            
+            
+            const yLabel = new THREE.Mesh(labelGeom, new THREE.MeshBasicMaterial({ color: 0x44ff44 }));
+            yLabel.position.set(0, 26, 0);
+            scene.add(yLabel);
+            
+            
+            const zLabel = new THREE.Mesh(labelGeom, new THREE.MeshBasicMaterial({ color: 0x4444ff }));
+            zLabel.position.set(0, 0, 26);
+            scene.add(zLabel);
+            
+        }
+        
+        function addTargetSatellite() {
+            const satGroup = new THREE.Group();
+            
+            
+            const bodyGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+            const bodyMat = new THREE.MeshStandardMaterial({ 
+                color: 0xccaa00, roughness: 0.3, metalness: 0.8 
+            });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            satGroup.add(body);
+            
+            
+            const panelGeo = new THREE.BoxGeometry(0.1, 5.0, 0.8);
+            const panelMat = new THREE.MeshStandardMaterial({ 
+                color: 0x001133, roughness: 0.2, metalness: 0.1, emissive: 0x000510
+            });
+            const panels = new THREE.Mesh(panelGeo, panelMat);
+            satGroup.add(panels);
+            
+            
+            const antGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.8);
+            const antMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
+            const antenna = new THREE.Mesh(antGeo, antMat);
+            antenna.position.set(0, 0, 0.8);
+            antenna.rotation.x = Math.PI / 2; 
+            satGroup.add(antenna);
+            
+            
+            const glowGeom = new THREE.SphereGeometry(2.5, 32, 32);
+            const glowMat = new THREE.MeshBasicMaterial({ 
+                color: 0xffd43b, transparent: true, opacity: 0.05, wireframe: true
+            });
+            const glow = new THREE.Mesh(glowGeom, glowMat);
+            satGroup.add(glow);
+
+            scene.add(satGroup);
+        }
+        
+        function generateButtons() {
+            const approachList = document.getElementById('approach-list');
+            const orbitList = document.getElementById('orbit-list');
+            
+            TRAJECTORIES.approach.forEach((t, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'traj-btn';
+                btn.dataset.key = t.key;
+                const data = t.gen();
+                btn.innerHTML = `${t.name} <span class="count">${data.length} pts</span>`;
+                btn.onclick = () => toggleTrajectory(t.key, t.name, t.gen, 'approach', i);
+                approachList.appendChild(btn);
+            });
+            
+            TRAJECTORIES.orbit.forEach((t, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'traj-btn';
+                btn.dataset.key = t.key;
+                const data = t.gen();
+                btn.innerHTML = `${t.name} <span class="count">${data.length} pts</span>`;
+                btn.onclick = () => toggleTrajectory(t.key, t.name, t.gen, 'orbit', i);
+                orbitList.appendChild(btn);
+            });
+        }
+        
+        function toggleTrajectory(key, name, generator, type, index) {
+            const btn = document.querySelector(`button[data-key="${key}"]`);
+            
+            if (activeTrajectories.has(key)) {
+                const obj = activeTrajectories.get(key);
+                trajectoryGroup.remove(obj);
+                activeTrajectories.delete(key);
+                animationData.delete(key);
+                btn.classList.remove('active');
+                updateInfo(null);
+            } else {
+                const data = generator();
+                const color = type === 'approach' ? COLORS.approach[index % COLORS.approach.length] : COLORS.orbit[index];
+                const obj = createTrajectoryObject(data, color, key, type);
+                trajectoryGroup.add(obj);
+                activeTrajectories.set(key, obj);
+                btn.classList.add('active');
+                updateInfo({ name, data });
+            }
+        }
+        
+        function createTrajectoryObject(data, color, key, type) {
+            const group = new THREE.Group();
+            
+            const points = data.map(p => new THREE.Vector3(p.x, p.y, p.z));
+            
+            // Static trajectory line (dimmer)
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ color, linewidth: 2, transparent: true, opacity: 0.35 });
+            const line = new THREE.Line(geometry, material);
+            group.add(line);
+            
+            // Start marker
+            const startGeom = new THREE.SphereGeometry(0.3, 16, 16);
+            const startMat = new THREE.MeshBasicMaterial({ color: 0xff6b6b });
+            const startPoint = new THREE.Mesh(startGeom, startMat);
+            startPoint.position.copy(points[0]);
+            group.add(startPoint);
+            
+            // End marker
+            const endGeom = new THREE.SphereGeometry(0.3, 16, 16);
+            const endMat = new THREE.MeshBasicMaterial({ color: 0x51cf66 });
+            const endPoint = new THREE.Mesh(endGeom, endMat);
+            endPoint.position.copy(points[points.length - 1]);
+            group.add(endPoint);
+            
+            // Direction arrows
+            const arrowInterval = Math.max(1, Math.floor(data.length / 10));
+            const center = new THREE.Vector3(0, 0, 0);
+            for (let i = 0; i < data.length - 1; i += arrowInterval) {
+                const pos = points[i];
+                const dir = new THREE.Vector3().subVectors(center, pos).normalize();
+                const arrow = new THREE.ArrowHelper(dir, pos, 1.5, color, 0.4, 0.2);
+                group.add(arrow);
+            }
+            
+            // Moving sphere (animated)
+            const sphereGeom = new THREE.SphereGeometry(0.45, 24, 24);
+            const sphereMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const movingSphere = new THREE.Mesh(sphereGeom, sphereMat);
+            movingSphere.position.copy(points[0]);
+            group.add(movingSphere);
+            
+            // Glow ring around moving sphere
+            const glowGeom = new THREE.SphereGeometry(0.7, 16, 16);
+            const glowMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.25 });
+            const glowSphere = new THREE.Mesh(glowGeom, glowMat);
+            movingSphere.add(glowSphere);
+            
+            // Animated trail (drawn portion of the path)
+            const trailMaxLen = type === 'orbit' ? 80 : 40;
+            const trailGeometry = new THREE.BufferGeometry();
+            const trailPositions = new Float32Array(trailMaxLen * 3);
+            trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+            trailGeometry.setDrawRange(0, 0);
+            const trailMaterial = new THREE.LineBasicMaterial({ color, linewidth: 2, transparent: true, opacity: 0.9 });
+            const trailMesh = new THREE.Line(trailGeometry, trailMaterial);
+            group.add(trailMesh);
+            
+            const speed = type === 'approach' ? 0.004 : 0.002;
+            animationData.set(key, {
+                points,
+                progress: 0,
+                type,
+                speed,
+                movingSphere,
+                trailMesh,
+                trailMaxLen,
+                color
+            });
+            
+            return group;
+        }
+        
+        function updateInfo(info) {
+            if (info) {
+                document.getElementById('info-name').textContent = info.name;
+                document.getElementById('info-points').textContent = info.data.length;
+                const startDist = Math.sqrt(info.data[0].x**2 + info.data[0].y**2 + info.data[0].z**2);
+                const endDist = Math.sqrt(info.data[info.data.length-1].x**2 + info.data[info.data.length-1].y**2 + info.data[info.data.length-1].z**2);
+                document.getElementById('info-start').textContent = startDist.toFixed(1) + 'm';
+                document.getElementById('info-end').textContent = endDist.toFixed(1) + 'm';
+            } else {
+                document.getElementById('info-name').textContent = '-';
+                document.getElementById('info-points').textContent = '-';
+                document.getElementById('info-start').textContent = '-';
+                document.getElementById('info-end').textContent = '-';
+            }
+        }
+        
+        function showAllApproach() {
+            TRAJECTORIES.approach.forEach((t, i) => {
+                if (!activeTrajectories.has(t.key)) {
+                    const data = t.gen();
+                    const color = COLORS.approach[i % COLORS.approach.length];
+                    const obj = createTrajectoryObject(data, color, t.key, 'approach');
+                    trajectoryGroup.add(obj);
+                    activeTrajectories.set(t.key, obj);
+                    document.querySelector(`button[data-key="${t.key}"]`).classList.add('active');
+                }
+            });
+        }
+        
+        function showAllOrbit() {
+            TRAJECTORIES.orbit.forEach((t, i) => {
+                if (!activeTrajectories.has(t.key)) {
+                    const data = t.gen();
+                    const color = COLORS.orbit[i];
+                    const obj = createTrajectoryObject(data, color, t.key, 'orbit');
+                    trajectoryGroup.add(obj);
+                    activeTrajectories.set(t.key, obj);
+                    document.querySelector(`button[data-key="${t.key}"]`).classList.add('active');
+                }
+            });
+        }
+        
+        function clearAll() {
+            activeTrajectories.forEach((obj, key) => {
+                trajectoryGroup.remove(obj);
+                document.querySelector(`button[data-key="${key}"]`).classList.remove('active');
+            });
+            activeTrajectories.clear();
+            animationData.clear();
+            updateInfo(null);
+        }
+        
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            animationData.forEach((anim) => {
+                const pts = anim.points;
+                const n = pts.length;
+                anim.progress += anim.speed;
+                
+                if (anim.type === 'approach') {
+                    if (anim.progress >= 1) anim.progress = 0;
+                    const idx = anim.progress * (n - 1);
+                    const i = Math.floor(idx);
+                    const frac = idx - i;
+                    const a = pts[Math.min(i, n - 1)];
+                    const b = pts[Math.min(i + 1, n - 1)];
+                    anim.movingSphere.position.lerpVectors(a, b, frac);
+                } else {
+                    if (anim.progress >= 1) anim.progress -= 1;
+                    const idx = anim.progress * (n - 1);
+                    const i = Math.floor(idx);
+                    const frac = idx - i;
+                    const a = pts[i % n];
+                    const b = pts[(i + 1) % n];
+                    anim.movingSphere.position.lerpVectors(a, b, frac);
+                }
+                
+                // Update trail
+                const currentIdx = Math.floor(anim.progress * (n - 1));
+                const trailLen = Math.min(anim.trailMaxLen, currentIdx + 1);
+                const startIdx = Math.max(0, currentIdx - trailLen + 1);
+                const posArr = anim.trailMesh.geometry.attributes.position.array;
+                for (let j = 0; j < trailLen; j++) {
+                    const pt = pts[startIdx + j];
+                    posArr[j * 3] = pt.x;
+                    posArr[j * 3 + 1] = pt.y;
+                    posArr[j * 3 + 2] = pt.z;
+                }
+                anim.trailMesh.geometry.setDrawRange(0, trailLen);
+                anim.trailMesh.geometry.attributes.position.needsUpdate = true;
+                
+                // Pulse the glow
+                const pulse = 0.2 + 0.1 * Math.sin(Date.now() * 0.005);
+                if (anim.movingSphere.children[0]) {
+                    anim.movingSphere.children[0].material.opacity = pulse;
+                }
+            });
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        init();
+    </script>
+</body>
+</html>

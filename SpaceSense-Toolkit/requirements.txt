@@ -1,9 +1,0 @@
-# SpaceSense-Toolkit 依赖
-# pip install -r requirements.txt
-
-numpy>=1.24
-opencv-python>=4.8
-Pillow>=10.0
-tqdm>=4.60
-matplotlib>=3.7
-flask>=2.3

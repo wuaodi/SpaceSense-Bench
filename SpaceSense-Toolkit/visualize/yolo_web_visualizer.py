@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-YOLO格式数据可视化Web服务器
-可视化转换后的YOLO格式标注
+YOLO format data web visualizer.
+Visualizes converted YOLO annotations with bounding boxes overlaid on images.
 
-使用方法:
+Usage:
   python yolo_web_visualizer.py --data-root /path/to/yolo_data
 """
 import os
@@ -17,13 +17,13 @@ from PIL import Image, ImageDraw, ImageFont
 
 app = Flask(__name__, template_folder=str(Path(__file__).parent / "templates"))
 
-YOLO_DATA_ROOT = None
+app.config['YOLO_DATA_ROOT'] = None
 
-# 类别定义
-CLASS_NAMES = ['main_body', 'solar_panel', 'dish_antenna', 'omni_antenna', 
+# Class definitions
+CLASS_NAMES = ['main_body', 'solar_panel', 'dish_antenna', 'omni_antenna',
                'payload', 'thruster', 'adapter_ring']
 
-# 颜色定义 (BGR格式用于OpenCV)
+# Colors per class (BGR for OpenCV)
 CLASS_COLORS = [
     (180, 119, 31),   # main_body - blue
     (14, 127, 255),   # solar_panel - orange
@@ -36,27 +36,23 @@ CLASS_COLORS = [
 
 
 def extract_satellite_name(filename):
-    """从文件名提取卫星名称
-    例如: ACE_trajectory1_frame001.png -> ACE
-    """
+    """Extract satellite name from filename (e.g. ACE_approach_front_xxx -> ACE)."""
     return filename.split('_')[0]
 
 
 def get_dataset_info():
-    """获取数据集信息"""
+    """Collect per-split image counts grouped by satellite."""
     datasets = {}
     
     for split in ['train', 'val']:
-        image_dir = YOLO_DATA_ROOT / split / 'images'
-        label_dir = YOLO_DATA_ROOT / split / 'labels'
+        image_dir = app.config['YOLO_DATA_ROOT'] / split / 'images'
+        label_dir = app.config['YOLO_DATA_ROOT'] / split / 'labels'
         
         if not image_dir.exists():
             continue
         
-        # 获取所有图像
         image_files = sorted(image_dir.glob('*.png'))
-        
-        # 按卫星分组
+
         satellites = {}
         for img_file in image_files:
             sat_name = extract_satellite_name(img_file.stem)
@@ -74,112 +70,81 @@ def get_dataset_info():
 
 
 def parse_yolo_label(label_path, img_width, img_height):
-    """
-    解析YOLO标签文件
-    
-    Args:
-        label_path: 标签文件路径
-        img_width: 图像宽度
-        img_height: 图像高度
-    
-    Returns:
-        list of dict: [{class_id, class_name, bbox, center, size}, ...]
-    """
+    """Parse a YOLO label file and return bounding boxes in pixel coordinates."""
     if not label_path.exists():
         return []
-    
+
     boxes = []
     with open(label_path, 'r') as f:
         for line in f:
             values = line.strip().split()
             if len(values) != 5:
                 continue
-            
+
             class_id = int(values[0])
             cx, cy, w, h = map(float, values[1:])
-            
-            # 转换为像素坐标
+
             cx_px = cx * img_width
             cy_px = cy * img_height
-            w_px = w * img_width
-            h_px = h * img_height
-            
-            # 计算左上角和右下角坐标
+            w_px  = w  * img_width
+            h_px  = h  * img_height
+
             x1 = int(cx_px - w_px / 2)
             y1 = int(cy_px - h_px / 2)
             x2 = int(cx_px + w_px / 2)
             y2 = int(cy_px + h_px / 2)
-            
+
             boxes.append({
-                'class_id': class_id,
+                'class_id':   class_id,
                 'class_name': CLASS_NAMES[class_id],
-                'bbox': [x1, y1, x2, y2],
-                'center': [int(cx_px), int(cy_px)],
-                'size': [int(w_px), int(h_px)],
+                'bbox':       [x1, y1, x2, y2],
+                'center':     [int(cx_px), int(cy_px)],
+                'size':       [int(w_px), int(h_px)],
                 'normalized': [cx, cy, w, h]
             })
-    
+
     return boxes
 
 
 def draw_boxes_on_image(image_path, label_path):
-    """
-    在图像上绘制边界框
-    
-    Args:
-        image_path: 图像文件路径
-        label_path: 标签文件路径
-    
-    Returns:
-        PIL.Image: 绘制了边界框的图像
-    """
-    # 读取图像
+    """Draw bounding boxes on an image and return the annotated PIL image."""
     img = Image.open(image_path)
     img_width, img_height = img.size
     draw = ImageDraw.Draw(img)
-    
-    # 解析标签
+
     boxes = parse_yolo_label(label_path, img_width, img_height)
-    
-    # 尝试加载字体
+
     try:
         font = ImageFont.truetype("arial.ttf", 20)
-    except:
+    except Exception:
         font = ImageFont.load_default()
-    
-    # 绘制每个边界框
+
     for box in boxes:
-        class_id = box['class_id']
+        class_id   = box['class_id']
         class_name = box['class_name']
         x1, y1, x2, y2 = box['bbox']
-        
-        # BGR转RGB
+
         color = CLASS_COLORS[class_id]
-        color_rgb = (color[2], color[1], color[0])
-        
-        # 绘制边界框
+        color_rgb = (color[2], color[1], color[0])  # BGR -> RGB
+
         draw.rectangle([x1, y1, x2, y2], outline=color_rgb, width=3)
-        
-        # 绘制标签背景
-        text = f"{class_name}"
+
+        text = class_name
         bbox = draw.textbbox((x1, y1), text, font=font)
         draw.rectangle([bbox[0]-2, bbox[1]-2, bbox[2]+2, bbox[3]+2], fill=color_rgb)
-        
-        # 绘制文字
         draw.text((x1, y1), text, fill=(255, 255, 255), font=font)
-    
+
     return img, boxes
 
 
 @app.route('/')
 def index():
-    """主页"""
     return render_template('yolo_visualizer.html')
 
 
 @app.route('/api/dataset_info')
 def get_dataset_info_api():
-    """获取数据集信息"""
+    """Return dataset split statistics."""
     try:
         datasets = get_dataset_info()
         return jsonify({'success': True, 'datasets': datasets})
@@ -189,74 +154,46 @@ def get_dataset_info_api():
 
 @app.route('/api/satellites/<split>')
 def get_satellites(split):
-    """获取指定数据集的卫星列表"""
+    """Return satellite list for a given split."""
     try:
         datasets = get_dataset_info()
-        
         if split not in datasets:
-            return jsonify({'success': False, 'error': f'数据集 {split} 不存在'})
-        
+            return jsonify({'success': False, 'error': f'Split {split} not found'})
         satellites = datasets[split]['satellites']
-        satellite_list = []
-        
-        for sat_name in sorted(satellites.keys()):
-            satellite_list.append({
-                'name': sat_name,
-                'image_count': len(satellites[sat_name])
-            })
-        
-        return jsonify({
-            'success': True, 
-            'satellites': satellite_list,
-            'total': len(satellite_list)
-        })
+        satellite_list = [{'name': n, 'image_count': len(imgs)} for n, imgs in sorted(satellites.items())]
+        return jsonify({'success': True, 'satellites': satellite_list, 'total': len(satellite_list)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
 
 @app.route('/api/images/<split>/<satellite_name>')
 def get_images(split, satellite_name):
-    """获取指定卫星的所有图像"""
+    """Return all image IDs for a given satellite in a split."""
     try:
         datasets = get_dataset_info()
-        
         if split not in datasets:
-            return jsonify({'success': False, 'error': f'数据集 {split} 不存在'})
-        
+            return jsonify({'success': False, 'error': f'Split {split} not found'})
         satellites = datasets[split]['satellites']
-        
         if satellite_name not in satellites:
-            return jsonify({'success': False, 'error': f'卫星 {satellite_name} 不存在'})
-        
+            return jsonify({'success': False, 'error': f'Satellite {satellite_name} not found'})
         images = satellites[satellite_name]
-        
-        return jsonify({
-            'success': True,
-            'images': images,
-            'total': len(images)
-        })
+        return jsonify({'success': True, 'images': images, 'total': len(images)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
 
 @app.route('/api/image_with_boxes/<split>/<image_name>')
 def get_image_with_boxes(split, image_name):
-    """获取带有边界框的图像"""
+    """Return the image with bounding boxes drawn on it."""
     try:
-        image_path = YOLO_DATA_ROOT / split / 'images' / f'{image_name}.png'
-        label_path = YOLO_DATA_ROOT / split / 'labels' / f'{image_name}.txt'
-        
+        image_path = app.config['YOLO_DATA_ROOT'] / split / 'images' / f'{image_name}.png'
+        label_path = app.config['YOLO_DATA_ROOT'] / split / 'labels' / f'{image_name}.txt'
         if not image_path.exists():
-            return jsonify({'success': False, 'error': '图像不存在'}), 404
-        
-        # 绘制边界框
-        img, boxes = draw_boxes_on_image(image_path, label_path)
-        
-        # 转换为字节流
+            return jsonify({'success': False, 'error': 'Image not found'}), 404
+        img, _ = draw_boxes_on_image(image_path, label_path)
         img_io = BytesIO()
         img.save(img_io, 'PNG')
         img_io.seek(0)
-        
         return send_file(img_io, mimetype='image/png')
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -264,33 +201,21 @@ def get_image_with_boxes(split, image_name):
 
 @app.route('/api/annotation/<split>/<image_name>')
 def get_annotation(split, image_name):
-    """获取指定图像的标注信息"""
+    """Return bounding box annotations for a given image."""
     try:
-        image_path = YOLO_DATA_ROOT / split / 'images' / f'{image_name}.png'
-        label_path = YOLO_DATA_ROOT / split / 'labels' / f'{image_name}.txt'
-        
+        image_path = app.config['YOLO_DATA_ROOT'] / split / 'images' / f'{image_name}.png'
+        label_path = app.config['YOLO_DATA_ROOT'] / split / 'labels' / f'{image_name}.txt'
         if not image_path.exists():
-            return jsonify({'success': False, 'error': '图像不存在'})
-        
-        # 获取图像尺寸
+            return jsonify({'success': False, 'error': 'Image not found'})
         img = Image.open(image_path)
         img_width, img_height = img.size
-        
-        # 解析标签
         boxes = parse_yolo_label(label_path, img_width, img_height)
-        
-        # 统计类别
         class_stats = {}
         for box in boxes:
-            class_name = box['class_name']
-            if class_name not in class_stats:
-                class_stats[class_name] = {
-                    'count': 0,
-                    'class_id': box['class_id'],
-                    'color': CLASS_COLORS[box['class_id']]
-                }
-            class_stats[class_name]['count'] += 1
-        
+            cn = box['class_name']
+            if cn not in class_stats:
+                class_stats[cn] = {'count': 0, 'class_id': box['class_id'], 'color': CLASS_COLORS[box['class_id']]}
+            class_stats[cn]['count'] += 1
         return jsonify({
             'success': True,
             'boxes': boxes,
@@ -304,34 +229,32 @@ def get_annotation(split, image_name):
 
 @app.route('/api/class_info')
 def get_class_info():
-    """获取类别信息"""
+    """Return class name and color definitions."""
     class_info = []
     for i, name in enumerate(CLASS_NAMES):
         color = CLASS_COLORS[i]
         class_info.append({
             'id': i,
             'name': name,
-            'color': [color[2], color[1], color[0]]  # 转为RGB
+            'color': [color[2], color[1], color[0]]  # BGR -> RGB
         })
     return jsonify(class_info)
 
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description="YOLO数据可视化Web服务器")
+    parser = argparse.ArgumentParser(description="YOLO annotation web visualizer")
     parser.add_argument('--data-root', type=str, required=True,
-                       help='YOLO格式数据根目录')
-    parser.add_argument('--port', type=int, default=5001, help='端口号')
+                        help='YOLO data root directory')
+    parser.add_argument('--port', type=int, default=5001, help='Port number (default: 5001)')
     _args = parser.parse_args()
 
-    YOLO_DATA_ROOT = Path(_args.data_root)
+    app.config['YOLO_DATA_ROOT'] = Path(_args.data_root).resolve()
 
-    print("\n" + "="*70)
-    print("YOLO数据可视化Web服务器")
-    print("="*70)
-    print(f"数据根目录: {YOLO_DATA_ROOT}")
-    print(f"\n请在浏览器中打开: http://localhost:{_args.port}")
-    print("="*70 + "\n")
+    print(f"\n=== YOLO Web Visualizer ===")
+    print(f"Data root: {_args.data_root}")
+    print(f"Open in browser: http://localhost:{_args.port}")
+    print("Press Ctrl+C to stop\n")
 
     app.run(debug=True, host='0.0.0.0', port=_args.port)
 

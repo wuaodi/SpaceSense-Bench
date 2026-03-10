@@ -1,15 +1,11 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YOLO数据可视化</title>
+    <title>YOLO Annotation Visualizer</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -35,16 +31,8 @@
             text-align: center;
         }
 
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
+        .header p  { font-size: 1.1em; opacity: 0.9; }
 
         .controls {
             padding: 20px 30px;
@@ -55,17 +43,8 @@
             gap: 15px;
         }
 
-        .control-group {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .control-group label {
-            font-weight: 600;
-            margin-bottom: 5px;
-            color: #495057;
-            font-size: 0.9em;
-        }
+        .control-group { display: flex; flex-direction: column; }
+        .control-group label { font-weight: 600; margin-bottom: 5px; color: #495057; font-size: 0.9em; }
 
         select, button {
             padding: 10px;
@@ -75,20 +54,8 @@
             transition: all 0.3s;
         }
 
-        select {
-            background: white;
-            cursor: pointer;
-        }
-
-        select:hover {
-            border-color: #667eea;
-        }
-
-        select:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
+        select { background: white; cursor: pointer; }
+        select:hover, select:focus { border-color: #667eea; outline: none; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
 
         button {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -98,16 +65,8 @@
             font-weight: 600;
         }
 
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        button:disabled {
-            background: #ced4da;
-            cursor: not-allowed;
-            transform: none;
-        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102,126,234,0.4); }
+        button:disabled { background: #ced4da; cursor: not-allowed; transform: none; }
 
         .stats {
             padding: 20px 30px;
@@ -118,31 +77,11 @@
             border-bottom: 2px solid #e9ecef;
         }
 
-        .stat-card {
-            padding: 15px;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-radius: 10px;
-            text-align: center;
-        }
+        .stat-card { padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 10px; text-align: center; }
+        .stat-card .label { font-size: 0.9em; color: #6c757d; margin-bottom: 5px; }
+        .stat-card .value { font-size: 1.8em; font-weight: bold; color: #667eea; }
 
-        .stat-card .label {
-            font-size: 0.9em;
-            color: #6c757d;
-            margin-bottom: 5px;
-        }
-
-        .stat-card .value {
-            font-size: 1.8em;
-            font-weight: bold;
-            color: #667eea;
-        }
-
-        .content {
-            display: grid;
-            grid-template-columns: 1fr 3fr;
-            gap: 20px;
-            padding: 30px;
-        }
+        .content { display: grid; grid-template-columns: 1fr 3fr; gap: 20px; padding: 30px; }
 
         .sidebar {
             background: #f8f9fa;
@@ -152,18 +91,9 @@
             overflow-y: auto;
         }
 
-        .sidebar h3 {
-            margin-bottom: 15px;
-            color: #495057;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #dee2e6;
-        }
+        .sidebar h3 { margin-bottom: 15px; color: #495057; padding-bottom: 10px; border-bottom: 2px solid #dee2e6; }
 
-        .class-legend {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
+        .class-legend { display: flex; flex-direction: column; gap: 10px; }
 
         .class-item {
             display: flex;
@@ -175,44 +105,15 @@
             transition: transform 0.2s;
         }
 
-        .class-item:hover {
-            transform: translateX(5px);
-        }
+        .class-item:hover { transform: translateX(5px); }
 
-        .class-color {
-            width: 30px;
-            height: 30px;
-            border-radius: 5px;
-            border: 2px solid #dee2e6;
-        }
+        .class-color { width: 30px; height: 30px; border-radius: 5px; border: 2px solid #dee2e6; }
+        .class-name  { font-weight: 600; color: #495057; flex: 1; }
+        .class-count { background: #667eea; color: white; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; }
 
-        .class-name {
-            font-weight: 600;
-            color: #495057;
-            flex: 1;
-        }
+        .main-content { display: flex; flex-direction: column; gap: 20px; }
 
-        .class-count {
-            background: #667eea;
-            color: white;
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 0.85em;
-            font-weight: bold;
-        }
-
-        .main-content {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        .image-container {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
+        .image-container { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
 
         .image-wrapper {
             width: 100%;
@@ -225,45 +126,16 @@
             overflow: hidden;
         }
 
-        .image-wrapper img {
-            max-width: 100%;
-            height: auto;
-            display: block;
-        }
+        .image-wrapper img { max-width: 100%; height: auto; display: block; }
 
-        .image-info {
-            margin-top: 15px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
+        .image-info { margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; }
 
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #dee2e6;
-        }
+        .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #dee2e6; }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { font-weight: 600; color: #6c757d; }
+        .info-value  { color: #495057; }
 
-        .info-row:last-child {
-            border-bottom: none;
-        }
-
-        .info-label {
-            font-weight: 600;
-            color: #6c757d;
-        }
-
-        .info-value {
-            color: #495057;
-        }
-
-        .navigation {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 15px;
-        }
+        .navigation { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }
 
         .nav-button {
             padding: 10px 20px;
@@ -276,140 +148,105 @@
             transition: all 0.3s;
         }
 
-        .nav-button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
+        .nav-button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102,126,234,0.4); }
+        .nav-button:disabled { background: #ced4da; cursor: not-allowed; transform: none; }
 
-        .nav-button:disabled {
-            background: #ced4da;
-            cursor: not-allowed;
-            transform: none;
-        }
+        .loading { text-align: center; padding: 40px; color: #6c757d; font-size: 1.2em; }
 
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #6c757d;
-            font-size: 1.2em;
-        }
+        .error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f5c6cb; }
 
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            border-left: 4px solid #f5c6cb;
-        }
-
-        /* 滚动条样式 */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #667eea;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #764ba2;
-        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #667eea; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #764ba2; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🛰️ YOLO数据可视化器</h1>
-            <p>SpaceSense-136 目标检测数据集</p>
+            <h1>🛰️ YOLO Annotation Visualizer</h1>
+            <p>SpaceSense-Bench — Object Detection Dataset</p>
         </div>
 
         <div class="controls">
             <div class="control-group">
-                <label for="split-select">数据集</label>
+                <label for="split-select">Split</label>
                 <select id="split-select">
-                    <option value="">选择数据集</option>
-                    <option value="train">训练集 (Train)</option>
-                    <option value="val">验证集 (Val)</option>
+                    <option value="">Select split</option>
+                    <option value="train">Train</option>
+                    <option value="val">Val</option>
                 </select>
             </div>
 
             <div class="control-group">
-                <label for="satellite-select">卫星</label>
+                <label for="satellite-select">Satellite</label>
                 <select id="satellite-select" disabled>
-                    <option value="">选择卫星</option>
+                    <option value="">Select satellite</option>
                 </select>
             </div>
 
             <div class="control-group">
-                <label for="image-select">图像</label>
+                <label for="image-select">Image</label>
                 <select id="image-select" disabled>
-                    <option value="">选择图像</option>
+                    <option value="">Select image</option>
                 </select>
             </div>
 
             <div class="control-group">
                 <label>&nbsp;</label>
-                <button id="load-btn" disabled>加载图像</button>
+                <button id="load-btn" disabled>Load Image</button>
             </div>
         </div>
 
         <div class="stats">
             <div class="stat-card">
-                <div class="label">数据集</div>
+                <div class="label">Split</div>
                 <div class="value" id="stat-dataset">-</div>
             </div>
             <div class="stat-card">
-                <div class="label">当前卫星</div>
+                <div class="label">Satellite</div>
                 <div class="value" id="stat-satellite">-</div>
             </div>
             <div class="stat-card">
-                <div class="label">图像总数</div>
+                <div class="label">Total Images</div>
                 <div class="value" id="stat-images">-</div>
             </div>
             <div class="stat-card">
-                <div class="label">边界框数</div>
+                <div class="label">Bounding Boxes</div>
                 <div class="value" id="stat-boxes">-</div>
             </div>
         </div>
 
         <div class="content">
             <div class="sidebar">
-                <h3>📋 类别统计</h3>
+                <h3>Class Statistics</h3>
                 <div class="class-legend" id="class-legend">
-                    <div class="loading">请选择图像</div>
+                    <div class="loading">Select an image</div>
                 </div>
             </div>
 
             <div class="main-content">
                 <div class="image-container">
                     <div class="image-wrapper" id="image-wrapper">
-                        <div class="loading">请选择数据集和卫星</div>
+                        <div class="loading">Select a split and satellite to begin</div>
                     </div>
-                    
+
                     <div class="navigation">
-                        <button class="nav-button" id="prev-btn" disabled>◀ 上一张</button>
-                        <button class="nav-button" id="next-btn" disabled>下一张 ▶</button>
+                        <button class="nav-button" id="prev-btn" disabled>◀ Prev</button>
+                        <button class="nav-button" id="next-btn" disabled>Next ▶</button>
                     </div>
 
                     <div class="image-info" id="image-info" style="display: none;">
                         <div class="info-row">
-                            <span class="info-label">文件名:</span>
+                            <span class="info-label">Filename:</span>
                             <span class="info-value" id="info-filename">-</span>
                         </div>
                         <div class="info-row">
-                            <span class="info-label">图像尺寸:</span>
+                            <span class="info-label">Image size:</span>
                             <span class="info-value" id="info-size">-</span>
                         </div>
                         <div class="info-row">
-                            <span class="info-label">边界框数量:</span>
+                            <span class="info-label">Bounding boxes:</span>
                             <span class="info-value" id="info-boxes">-</span>
                         </div>
                     </div>
@@ -425,50 +262,46 @@
         let currentImageIndex = 0;
         let classInfo = [];
 
-        // 加载类别信息
         async function loadClassInfo() {
             try {
                 const response = await fetch('/api/class_info');
-                const data = await response.json();
-                classInfo = data;
+                classInfo = await response.json();
             } catch (error) {
-                console.error('加载类别信息失败:', error);
+                console.error('Failed to load class info:', error);
             }
         }
 
-        // 加载卫星列表
         async function loadSatellites(split) {
             const satelliteSelect = document.getElementById('satellite-select');
             satelliteSelect.disabled = true;
-            satelliteSelect.innerHTML = '<option value="">加载中...</option>';
+            satelliteSelect.innerHTML = '<option value="">Loading...</option>';
 
             try {
                 const response = await fetch(`/api/satellites/${split}`);
                 const data = await response.json();
 
                 if (data.success) {
-                    satelliteSelect.innerHTML = '<option value="">选择卫星</option>';
+                    satelliteSelect.innerHTML = '<option value="">Select satellite</option>';
                     data.satellites.forEach(sat => {
                         const option = document.createElement('option');
                         option.value = sat.name;
-                        option.textContent = `${sat.name} (${sat.image_count} 张图像)`;
+                        option.textContent = `${sat.name} (${sat.image_count} images)`;
                         satelliteSelect.appendChild(option);
                     });
                     satelliteSelect.disabled = false;
                 } else {
-                    satelliteSelect.innerHTML = '<option value="">加载失败</option>';
+                    satelliteSelect.innerHTML = '<option value="">Load failed</option>';
                 }
             } catch (error) {
-                console.error('加载卫星列表失败:', error);
-                satelliteSelect.innerHTML = '<option value="">加载失败</option>';
+                console.error('Failed to load satellites:', error);
+                satelliteSelect.innerHTML = '<option value="">Load failed</option>';
             }
         }
 
-        // 加载图像列表
         async function loadImages(split, satellite) {
             const imageSelect = document.getElementById('image-select');
             imageSelect.disabled = true;
-            imageSelect.innerHTML = '<option value="">加载中...</option>';
+            imageSelect.innerHTML = '<option value="">Loading...</option>';
 
             try {
                 const response = await fetch(`/api/images/${split}/${satellite}`);
@@ -476,7 +309,7 @@
 
                 if (data.success) {
                     currentImages = data.images;
-                    imageSelect.innerHTML = '<option value="">选择图像</option>';
+                    imageSelect.innerHTML = '<option value="">Select image</option>';
                     data.images.forEach((img, index) => {
                         const option = document.createElement('option');
                         option.value = index;
@@ -485,74 +318,59 @@
                     });
                     imageSelect.disabled = false;
                     document.getElementById('load-btn').disabled = false;
-                    
-                    // 更新统计
                     document.getElementById('stat-images').textContent = data.total;
                 } else {
-                    imageSelect.innerHTML = '<option value="">加载失败</option>';
+                    imageSelect.innerHTML = '<option value="">Load failed</option>';
                 }
             } catch (error) {
-                console.error('加载图像列表失败:', error);
-                imageSelect.innerHTML = '<option value="">加载失败</option>';
+                console.error('Failed to load images:', error);
+                imageSelect.innerHTML = '<option value="">Load failed</option>';
             }
         }
 
-        // 加载并显示图像
         async function loadImage(imageIndex) {
-            if (imageIndex < 0 || imageIndex >= currentImages.length) {
-                return;
-            }
+            if (imageIndex < 0 || imageIndex >= currentImages.length) return;
 
             currentImageIndex = imageIndex;
             const imageName = currentImages[imageIndex];
 
-            // 更新UI
-            document.getElementById('image-wrapper').innerHTML = '<div class="loading">加载中...</div>';
-            document.getElementById('class-legend').innerHTML = '<div class="loading">加载中...</div>';
+            document.getElementById('image-wrapper').innerHTML = '<div class="loading">Loading...</div>';
+            document.getElementById('class-legend').innerHTML = '<div class="loading">Loading...</div>';
 
             try {
-                // 加载带边界框的图像
-                const imageUrl = `/api/image_with_boxes/${currentSplit}/${imageName}`;
                 const img = document.createElement('img');
-                img.src = imageUrl;
+                img.src = `/api/image_with_boxes/${currentSplit}/${imageName}`;
                 img.alt = imageName;
                 document.getElementById('image-wrapper').innerHTML = '';
                 document.getElementById('image-wrapper').appendChild(img);
 
-                // 加载标注信息
                 const response = await fetch(`/api/annotation/${currentSplit}/${imageName}`);
                 const data = await response.json();
 
                 if (data.success) {
-                    // 更新信息
                     document.getElementById('info-filename').textContent = imageName;
                     document.getElementById('info-size').textContent = `${data.image_size[0]} × ${data.image_size[1]}`;
                     document.getElementById('info-boxes').textContent = data.total_boxes;
                     document.getElementById('stat-boxes').textContent = data.total_boxes;
                     document.getElementById('image-info').style.display = 'block';
-
-                    // 更新类别统计
                     updateClassLegend(data.class_stats);
-
-                    // 更新导航按钮
                     document.getElementById('prev-btn').disabled = (imageIndex === 0);
                     document.getElementById('next-btn').disabled = (imageIndex === currentImages.length - 1);
                 } else {
-                    document.getElementById('class-legend').innerHTML = '<div class="error">加载标注失败</div>';
+                    document.getElementById('class-legend').innerHTML = '<div class="error">Failed to load annotations</div>';
                 }
             } catch (error) {
-                console.error('加载图像失败:', error);
-                document.getElementById('image-wrapper').innerHTML = '<div class="error">加载失败</div>';
+                console.error('Failed to load image:', error);
+                document.getElementById('image-wrapper').innerHTML = '<div class="error">Load failed</div>';
             }
         }
 
-        // 更新类别图例
         function updateClassLegend(classStats) {
             const legend = document.getElementById('class-legend');
             legend.innerHTML = '';
 
             if (Object.keys(classStats).length === 0) {
-                legend.innerHTML = '<div class="loading">该图像没有标注</div>';
+                legend.innerHTML = '<div class="loading">No annotations in this image</div>';
                 return;
             }
 
@@ -562,8 +380,8 @@
 
                 const colorBox = document.createElement('div');
                 colorBox.className = 'class-color';
-                const color = stats.color;
-                colorBox.style.backgroundColor = `rgb(${color[2]}, ${color[1]}, ${color[0]})`;
+                const c = stats.color;
+                colorBox.style.backgroundColor = `rgb(${c[2]}, ${c[1]}, ${c[0]})`;
 
                 const name = document.createElement('div');
                 name.className = 'class-name';
@@ -580,16 +398,14 @@
             }
         }
 
-        // 事件监听
         document.getElementById('split-select').addEventListener('change', (e) => {
             currentSplit = e.target.value;
             if (currentSplit) {
                 loadSatellites(currentSplit);
-                document.getElementById('stat-dataset').textContent = currentSplit === 'train' ? '训练集' : '验证集';
+                document.getElementById('stat-dataset').textContent = currentSplit;
             }
-            // 重置其他选择
-            document.getElementById('satellite-select').innerHTML = '<option value="">选择卫星</option>';
-            document.getElementById('image-select').innerHTML = '<option value="">选择图像</option>';
+            document.getElementById('satellite-select').innerHTML = '<option value="">Select satellite</option>';
+            document.getElementById('image-select').innerHTML = '<option value="">Select image</option>';
             document.getElementById('load-btn').disabled = true;
         });
 
@@ -599,23 +415,19 @@
                 loadImages(currentSplit, currentSatellite);
                 document.getElementById('stat-satellite').textContent = currentSatellite;
             }
-            // 重置图像选择
-            document.getElementById('image-select').innerHTML = '<option value="">选择图像</option>';
+            document.getElementById('image-select').innerHTML = '<option value="">Select image</option>';
             document.getElementById('load-btn').disabled = true;
         });
 
         document.getElementById('image-select').addEventListener('change', (e) => {
-            const index = parseInt(e.target.value);
-            if (!isNaN(index)) {
+            if (!isNaN(parseInt(e.target.value))) {
                 document.getElementById('load-btn').disabled = false;
             }
         });
 
         document.getElementById('load-btn').addEventListener('click', () => {
             const index = parseInt(document.getElementById('image-select').value);
-            if (!isNaN(index)) {
-                loadImage(index);
-            }
+            if (!isNaN(index)) loadImage(index);
         });
 
         document.getElementById('prev-btn').addEventListener('click', () => {
@@ -632,18 +444,12 @@
             }
         });
 
-        // 键盘导航
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowLeft') {
-                document.getElementById('prev-btn').click();
-            } else if (e.key === 'ArrowRight') {
-                document.getElementById('next-btn').click();
-            }
+            if (e.key === 'ArrowLeft')  document.getElementById('prev-btn').click();
+            if (e.key === 'ArrowRight') document.getElementById('next-btn').click();
         });
 
-        // 初始化
         loadClassInfo();
     </script>
 </body>
 </html>
-

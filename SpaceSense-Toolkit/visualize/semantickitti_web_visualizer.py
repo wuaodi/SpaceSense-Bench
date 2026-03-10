@@ -1,19 +1,19 @@
 import os
 import csv
 import numpy as np
-from flask import Flask, render_template, jsonify, request, send_from_directory
+from flask import Flask, render_template, jsonify, request, send_from_directory, send_file
 from glob import glob
 from pathlib import Path
 import json
 
 app = Flask(__name__, template_folder=str(Path(__file__).parent / "templates"))
 
-KITTI_DATA_ROOT = None
-SEQUENCES_DIR = None
-MAPPING_FILE = None
-SATELLITE_JSON = None
+app.config['KITTI_DATA_ROOT'] = None
+app.config['SEQUENCES_DIR']   = None
+app.config['MAPPING_FILE']    = None
+app.config['SATELLITE_JSON']  = None
 
-# 类别定义（标签1-7，0不使用）
+# Class definitions (labels 1-7; 0 = background, not used here)
 LABEL_NAMES = {
     1: 'main_body',
     2: 'solar_panel',
@@ -24,7 +24,7 @@ LABEL_NAMES = {
     7: 'adapter_ring'
 }
 
-# 颜色定义 (RGB格式，0-255)
+# Colors per label (RGB, 0-255)
 LABEL_COLORS = {
     1: [31, 119, 180],    # blue
     2: [255, 127, 14],    # orange
@@ -36,11 +36,12 @@ LABEL_COLORS = {
 }
 
 def load_satellite_info():
-    """从JSON文件加载卫星详细信息"""
+    """Load satellite metadata from satellite_descriptions.json."""
     satellite_info = {}
-    if os.path.exists(SATELLITE_JSON):
+    json_path = app.config['SATELLITE_JSON']
+    if json_path and os.path.exists(json_path):
         try:
-            with open(SATELLITE_JSON, 'r', encoding='utf-8') as f:
+            with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             for sat in data['satellites']:
                 satellite_info[sat['name']] = {
@@ -48,17 +49,17 @@ def load_satellite_info():
                     'max_diameter_meters': sat.get('max_diameter_meters', None)
                 }
         except Exception as e:
-            print(f"警告: 无法读取卫星信息: {e}")
+            print(f"Warning: cannot read satellite info: {e}")
     return satellite_info
 
 
 def load_sequence_mapping():
-    """加载sequence序号与卫星名称的映射，并附加详细信息"""
+    """Load sequence ID -> satellite name mapping with metadata."""
     mapping = {}
     satellite_info = load_satellite_info()
-    
-    if os.path.exists(MAPPING_FILE):
-        with open(MAPPING_FILE, 'r', encoding='utf-8') as f:
+    mapping_file = app.config['MAPPING_FILE']
+    if mapping_file and os.path.exists(mapping_file):
+        with open(mapping_file, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 sat_name = row['satellite_name']
@@ -69,31 +70,27 @@ def load_sequence_mapping():
     return mapping
 
 def read_bin_pointcloud(bin_path):
-    """读取.bin格式的点云文件"""
+    """Read a .bin point cloud file (XYZI float32)."""
     points = np.fromfile(bin_path, dtype=np.float32)
     if points.size % 4 != 0:
-        raise ValueError(f"点云数据长度不是4的倍数: {points.size}")
-    points = points.reshape(-1, 4)
-    return points
+        raise ValueError(f"Point cloud size not divisible by 4: {points.size}")
+    return points.reshape(-1, 4)
 
 def read_label_file(label_path):
-    """读取.label格式的标签文件"""
+    """Read a .label file (uint32 per point)."""
     if not os.path.exists(label_path):
         return None
-    labels = np.fromfile(label_path, dtype=np.uint32)
-    return labels
+    return np.fromfile(label_path, dtype=np.uint32)
 
 @app.route('/')
 def index():
-    """主页"""
     return render_template('visualizer.html')
 
 @app.route('/api/satellites')
 def get_satellites():
-    """获取所有卫星列表（基于sequence mapping），包含详细信息"""
+    """Return all satellites with metadata (from sequence mapping)."""
     try:
         mapping = load_sequence_mapping()
-        # 返回序号和卫星详细信息的列表
         satellites = []
         for seq_id in sorted(mapping.keys(), key=lambda x: int(x)):
             sat_data = mapping[seq_id]
@@ -109,13 +106,12 @@ def get_satellites():
 
 @app.route('/api/frames/<sequence_id>')
 def get_frames(sequence_id):
-    """获取指定sequence的所有帧"""
+    """Return all frame IDs for a given sequence."""
     try:
-        velodyne_dir = os.path.join(SEQUENCES_DIR, sequence_id, 'velodyne')
+        velodyne_dir = os.path.join(app.config['SEQUENCES_DIR'], sequence_id, 'velodyne')
         bin_files = sorted(glob(os.path.join(velodyne_dir, "*.bin")))
         frame_ids = [os.path.splitext(os.path.basename(f))[0] for f in bin_files]
         
-        # 获取卫星信息
         mapping = load_sequence_mapping()
         sat_data = mapping.get(sequence_id, {'name': f"Sequence {sequence_id}", 'info': {}})
         satellite_name = sat_data['name']
@@ -132,44 +128,38 @@ def get_frames(sequence_id):
 
 @app.route('/api/pointcloud/<sequence_id>/<frame_id>')
 def get_pointcloud(sequence_id, frame_id):
-    """获取指定帧的点云数据"""
+    """Return XYZ points and per-point labels for a given frame."""
     try:
-        # 读取点云
-        bin_path = os.path.join(SEQUENCES_DIR, sequence_id, 'velodyne', f'{frame_id}.bin')
+        bin_path   = os.path.join(app.config['SEQUENCES_DIR'], sequence_id, 'velodyne', f'{frame_id}.bin')
+        label_path = os.path.join(app.config['SEQUENCES_DIR'], sequence_id, 'labels',   f'{frame_id}.label')
+
         points = read_bin_pointcloud(bin_path)
-        
-        # 读取标签
-        label_path = os.path.join(SEQUENCES_DIR, sequence_id, 'labels', f'{frame_id}.label')
         labels = read_label_file(label_path)
-        
-        # 准备数据
+
         data = {
             'success': True,
-            'points': points[:, :3].tolist(),  # 只返回XYZ
+            'points': points[:, :3].tolist(),
             'labels': labels.tolist() if labels is not None else None,
             'point_count': len(points)
         }
-        
-        # 添加标签统计
+
         if labels is not None:
-            unique_labels = np.unique(labels)
             label_stats = {}
-            for lbl in unique_labels:
-                count = int(np.sum(labels == lbl))
+            for lbl in np.unique(labels):
                 label_stats[int(lbl)] = {
-                    'name': LABEL_NAMES.get(int(lbl), 'unknown'),
-                    'count': count,
+                    'name':  LABEL_NAMES.get(int(lbl), 'unknown'),
+                    'count': int(np.sum(labels == lbl)),
                     'color': LABEL_COLORS.get(int(lbl), [128, 128, 128])
                 }
             data['label_stats'] = label_stats
-        
+
         return jsonify(data)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/label_info')
 def get_label_info():
-    """获取标签定义信息"""
+    """Return label name and color definitions."""
     label_info = {}
     for label_id, name in LABEL_NAMES.items():
         label_info[label_id] = {
@@ -180,31 +170,31 @@ def get_label_info():
 
 @app.route('/api/image/<sequence_id>/<frame_id>')
 def get_image(sequence_id, frame_id):
-    """获取指定帧的图像"""
-    try:
-        image_dir = os.path.join(SEQUENCES_DIR, sequence_id, 'image_2')
-        return send_from_directory(image_dir, f'{frame_id}.png')
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 404
+    """Return the RGB image for a given frame."""
+    image_path = os.path.join(app.config['SEQUENCES_DIR'], sequence_id, 'image_2', f'{frame_id}.png')
+    if not os.path.exists(image_path):
+        return jsonify({'success': False, 'error': f'Image not found: {image_path}'}), 404
+    return send_file(image_path, mimetype='image/png')
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description="Semantic-KITTI点云可视化Web服务器")
+    parser = argparse.ArgumentParser(description="Semantic-KITTI point cloud web visualizer")
     parser.add_argument('--data-root', type=str, required=True,
-                       help='Semantic-KITTI格式数据根目录 (包含 sequences/)')
+                        help='Semantic-KITTI data root (contains sequences/)')
     parser.add_argument('--satellite-json', type=str, default=None,
-                       help='satellite_descriptions.json 路径 (可选)')
-    parser.add_argument('--port', type=int, default=5000, help='端口号')
+                        help='Path to satellite_descriptions.json (optional)')
+    parser.add_argument('--port', type=int, default=5000, help='Port number (default: 5000)')
     _args = parser.parse_args()
 
-    KITTI_DATA_ROOT = _args.data_root
-    SEQUENCES_DIR = os.path.join(KITTI_DATA_ROOT, 'sequences')
-    MAPPING_FILE = os.path.join(KITTI_DATA_ROOT, 'sequence_mapping.csv')
-    SATELLITE_JSON = _args.satellite_json
+    data_root = os.path.abspath(_args.data_root)
+    app.config['KITTI_DATA_ROOT'] = data_root
+    app.config['SEQUENCES_DIR']   = os.path.join(data_root, 'sequences')
+    app.config['MAPPING_FILE']    = os.path.join(data_root, 'sequence_mapping.csv')
+    app.config['SATELLITE_JSON']  = os.path.abspath(_args.satellite_json) if _args.satellite_json else None
 
-    print("\n=== 点云可视化 Web 服务器 ===")
-    print(f"数据根目录: {KITTI_DATA_ROOT}")
-    print(f"请在浏览器中打开: http://localhost:{_args.port}")
-    print("按 Ctrl+C 停止服务器\n")
+    print(f"\n=== Semantic-KITTI Web Visualizer ===")
+    print(f"Data root: {_args.data_root}")
+    print(f"Open in browser: http://localhost:{_args.port}")
+    print("Press Ctrl+C to stop\n")
     app.run(debug=True, host='0.0.0.0', port=_args.port)
 
