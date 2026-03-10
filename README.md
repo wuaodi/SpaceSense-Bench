@@ -7,7 +7,7 @@ Official project page repository for the paper **"SpaceSense-Bench: A Large-Scal
   &nbsp;&nbsp;|&nbsp;&nbsp;
   <a href="https://github.com/wuaodi/SpaceSense-Bench"><img src="static/icon/project.svg" alt="Project" height="20">&nbsp;<b>Webpage</b></a>
   &nbsp;&nbsp;|&nbsp;&nbsp;
-  <a href="https://huggingface.co/datasets/Alvin16/SpaceSense-Bench"><img src="static/icon/huggingface.svg" alt="HuggingFace" height="20">&nbsp;<b>Dataset</b></a>
+  <a href="https://huggingface.co/datasets/Alvin16/SpaceSense-Bench/tree/main/raw"><img src="static/icon/huggingface.svg" alt="HuggingFace" height="20">&nbsp;<b>Dataset</b></a>
 </p>
 
 
