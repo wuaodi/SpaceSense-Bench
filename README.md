@@ -5,13 +5,13 @@ Official project page repository for the paper **"SpaceSense-Bench: A Large-Scal
 <p align="center">
   <a href="https://arxiv.org/abs/TODO"><img src="static/icon/arxiv.svg" alt="arXiv" height="20">&nbsp;<b>Paper</b></a>
   &nbsp;&nbsp;|&nbsp;&nbsp;
-  <a href="https://github.com/wuaodi/SpaceSense-Bench"><img src="static/icon/project.svg" alt="Project" height="20">&nbsp;<b>Webpage</b></a>
+  <a href="https://wuaodi.github.io/SpaceSense-Bench/"><img src="static/icon/project.svg" alt="Project" height="20">&nbsp;<b>Webpage</b></a>
   &nbsp;&nbsp;|&nbsp;&nbsp;
   <a href="https://huggingface.co/datasets/Alvin16/SpaceSense-Bench/tree/main/raw"><img src="static/icon/huggingface.svg" alt="HuggingFace" height="20">&nbsp;<b>Dataset</b></a>
 </p>
 
 
-## Overview
+## 🛰️ Overview
 
 SpaceSense-Bench is a large-scale multi-modal（RGB, Depth, LiDAR） benchmark designed for spacecraft perception and pose estimation in autonomous space operations such as on-orbit servicing and active debris removal.
 
@@ -24,15 +24,15 @@ The dataset contains 136 satellite models, each with approximately 70 GB of data
 The dataset is generated through a high-fidelity space simulation built in Unreal Engine 5 and a fully automated pipeline covering data acquisition, multi-stage quality control, and conversion to mainstream formats.
 
 
-## Dataset
+## 📦 Dataset
 
 The full dataset is publicly available on HuggingFace:
 
-**[https://huggingface.co/datasets/Alvin16/SpaceSense-Bench](https://huggingface.co/datasets/Alvin16/SpaceSense-Bench)**
+**[https://huggingface.co/datasets/Alvin16/SpaceSense-Bench](https://huggingface.co/datasets/Alvin16/SpaceSense-Bench/tree/main/raw)**
 
 Each satellite is packaged as a `.tar.gz` archive. Download and extract to use with the conversion tools below.
 
-## SpaceSense-Toolkit
+## 🔧 SpaceSense-Toolkit
 
 The [SpaceSense-Toolkit](SpaceSense-Toolkit/) directory provides tools for converting raw data to standard formats and visualizing the results.
 
@@ -69,7 +69,7 @@ python SpaceSense-Toolkit/visualize/yolo_web_visualizer.py --data-root output/yo
 ```
 
 
-## Citation
+## 📄 Citation
 
 If you find this project useful, please consider citing:
 
@@ -81,7 +81,3 @@ If you find this project useful, please consider citing:
 	url={https://github.com/wuaodi/SpaceSense-Bench}
 }
 ```
-
-## Acknowledgement
-
-This website is based on the [Academic Project Page Template](https://github.com/eliahuhorwitz/Academic-project-page-template).
