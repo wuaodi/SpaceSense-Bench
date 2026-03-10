@@ -2,9 +2,13 @@
 
 Official project page repository for the paper **"SpaceSense-Bench: A Large-Scale Multi-Modal Benchmark for Spacecraft Perception and Pose Estimation"**.
 
-[![Paper](https://img.shields.io/badge/Paper-arXiv-red)](https://arxiv.org/abs/TODO)
-[![Project Page](https://img.shields.io/badge/Project-Page-blue)](https://github.com/wuaodi/SpaceSense-Bench)
-[![HuggingFace Dataset](https://img.shields.io/badge/Dataset-HuggingFace-yellow)](https://huggingface.co/datasets/Alvin16/SpaceSense-Bench)
+<p align="center">
+  <a href="https://arxiv.org/abs/TODO"><img src="static/icon/arxiv.svg" alt="arXiv" height="20">&nbsp;<b>Paper</b></a>
+  &nbsp;&nbsp;|&nbsp;&nbsp;
+  <a href="https://github.com/wuaodi/SpaceSense-Bench"><img src="static/icon/project.svg" alt="Project" height="20">&nbsp;<b>Webpage</b></a>
+  &nbsp;&nbsp;|&nbsp;&nbsp;
+  <a href="https://huggingface.co/datasets/Alvin16/SpaceSense-Bench"><img src="static/icon/huggingface.svg" alt="HuggingFace" height="20">&nbsp;<b>Dataset</b></a>
+</p>
 
 
 ## Overview
@@ -70,9 +74,9 @@ python SpaceSense-Toolkit/visualize/yolo_web_visualizer.py --data-root output/yo
 If you find this project useful, please consider citing:
 
 ```bibtex
-@article{wu2026spacesensebench,
+@article{SpaceSense-Bench,
 	title={SpaceSense-Bench: A Large-Scale Multi-Modal Benchmark for Spacecraft Perception and Pose Estimation},
-	author={Wu, Aodi and Zuo, Jianhong and Zhao, Zeyuan and Luo, Xubo and Wang, Ruisuo and Wan, Xue},
+	author={Aodi Wu, Jianhong Zuo, Zeyuan Zhao, Xubo Luo, Ruisuo Wang, Xue Wan},
 	year={2026},
 	url={https://github.com/wuaodi/SpaceSense-Bench}
 }
