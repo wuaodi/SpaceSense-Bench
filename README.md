@@ -3,7 +3,7 @@
 Official project page repository for the paper **"SpaceSense-Bench: A Large-Scale Multi-Modal Benchmark for Spacecraft Perception and Pose Estimation"**.
 
 <p align="center">
-  <a href="https://arxiv.org/abs/TODO"><img src="static/icon/arxiv.svg" alt="arXiv" height="20">&nbsp;<b>Paper</b></a>
+  <a href="https://arxiv.org/abs/2603.09320"><img src="static/icon/arxiv.svg" alt="arXiv" height="20">&nbsp;<b>Paper</b></a>
   &nbsp;&nbsp;|&nbsp;&nbsp;
   <a href="https://wuaodi.github.io/SpaceSense-Bench/"><img src="static/icon/project.svg" alt="Project" height="20">&nbsp;<b>Webpage</b></a>
   &nbsp;&nbsp;|&nbsp;&nbsp;
@@ -78,6 +78,6 @@ If you find this project useful, please consider citing:
 	title={SpaceSense-Bench: A Large-Scale Multi-Modal Benchmark for Spacecraft Perception and Pose Estimation},
 	author={Aodi Wu, Jianhong Zuo, Zeyuan Zhao, Xubo Luo, Ruisuo Wang, Xue Wan},
 	year={2026},
-	url={https://github.com/wuaodi/SpaceSense-Bench}
+	url={https://arxiv.org/abs/2603.09320}
 }
 ```
