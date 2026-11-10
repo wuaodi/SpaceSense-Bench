@@ -6,13 +6,20 @@ Press any key to advance to the next frame.
 Usage:
   python project_lidar2img.py --img-path /path/to/image --lidar-path /path/to/lidar
   python project_lidar2img.py --img-path /path/to/image --lidar-path /path/to/lidar --step 5
+  python project_lidar2img.py --img-path /path/to/image --lidar-path /path/to/lidar --calibration /path/to/calibration.json
 """
 import os
-import math
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import argparse
+
+from sensor_geometry import (
+    DEFAULT_CALIBRATION_PATH,
+    load_calibration,
+    project_point_to_image,
+    transform_points,
+)
 
 
 def read_asc_pointcloud(filepath):
@@ -30,37 +37,24 @@ def read_asc_pointcloud(filepath):
     return np.array(points, dtype=np.float32)
 
 
-def transform_lidar_to_camera_frame(point):
-    """Transform a point from LiDAR frame to camera frame (identity here)."""
-    return point + np.array([0, 0, 0])
-
-
-def project_point_to_image(point, image_width, image_height):
-    """Project a 3D point onto the image plane. Returns (u, v) or None."""
-    fov_rad = math.radians(50)
-    focal_length = (image_width / 2) / math.tan(fov_rad / 2)
-
-    if point[0] <= 0:
-        return None
-
-    cx = image_width / 2
-    cy = image_height / 2
-    u = int(focal_length * point[1] / point[0] + cx)
-    v = int(focal_length * point[2] / point[0] + cy)
-
-    if 0 <= u < image_width and 0 <= v < image_height:
-        return (u, v)
-    return None
+def transform_lidar_to_camera_frame(point, lidar_to_camera=None):
+    """Transform a point with an explicit LiDAR-to-camera calibration."""
+    if lidar_to_camera is None:
+        lidar_to_camera, _ = load_calibration(DEFAULT_CALIBRATION_PATH)
+    return transform_points(point, lidar_to_camera)
 
 
 class InteractiveVisualizer:
     """Interactive frame-by-frame LiDAR projection visualizer."""
 
-    def __init__(self, img_path, lidar_path, step=10):
+    def __init__(self, img_path, lidar_path, step=10, lidar_to_camera=None):
         self.img_path   = img_path
         self.lidar_path = lidar_path
         self.step       = step
         self.current_idx = 0
+        if lidar_to_camera is None:
+            lidar_to_camera, _ = load_calibration(DEFAULT_CALIBRATION_PATH)
+        self.lidar_to_camera = lidar_to_camera
 
         asc_files = sorted([f for f in os.listdir(lidar_path) if f.endswith('.asc')])
         png_files = set(f for f in os.listdir(img_path) if f.endswith('.png'))
@@ -103,8 +97,8 @@ class InteractiveVisualizer:
         projected_img  = img.copy()
         valid_points   = []
 
-        for point in points:
-            transformed = transform_lidar_to_camera_frame(point)
+        transformed_points = transform_points(points, self.lidar_to_camera)
+        for transformed in transformed_points:
             uv = project_point_to_image(transformed, w, h)
             if uv:
                 valid_points.append(uv)
@@ -139,7 +133,27 @@ if __name__ == "__main__":
                         help="LiDAR folder path (e.g. raw_data/ACE/approach_back/lidar)")
     parser.add_argument("--step", type=int, default=10,
                         help="Sample every N frames (default: 10)")
+    parser.add_argument(
+        "--calibration",
+        type=str,
+        default=str(DEFAULT_CALIBRATION_PATH),
+        help=(
+            "LiDAR-to-camera calibration JSON "
+            f"(default: {DEFAULT_CALIBRATION_PATH})"
+        ),
+    )
     args = parser.parse_args()
 
-    visualizer = InteractiveVisualizer(args.img_path, args.lidar_path, args.step)
+    lidar_to_camera, calibration_metadata = load_calibration(args.calibration)
+    calibration_id = calibration_metadata.get("calibration_id", "unnamed")
+    print(f"Calibration: {calibration_id} ({args.calibration})")
+    print("T_camera_from_lidar:")
+    print(lidar_to_camera)
+
+    visualizer = InteractiveVisualizer(
+        args.img_path,
+        args.lidar_path,
+        args.step,
+        lidar_to_camera=lidar_to_camera,
+    )
     visualizer.start()
