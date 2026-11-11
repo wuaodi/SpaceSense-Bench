@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "calibration_id": "spacesense_legacy_raw_v1",
+  "description": "LiDAR-to-camera extrinsics for the published legacy SpaceSense-Bench raw-data release discussed in issue #8. Use a different calibration file for other sensor layouts or future exports.",
+  "units": "metres",
+  "source_frame": "lidar_airsim",
+  "target_frame": "camera_airsim",
+  "coordinate_convention": "AirSim: +X forward, +Y right, +Z down",
+  "transform_direction": "p_camera = T_camera_from_lidar @ p_lidar",
+  "T_camera_from_lidar": [
+    [1.0, 0.0, 0.0, 0.9],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+  ]
+}

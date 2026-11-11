@@ -21,7 +21,6 @@ os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
 import csv
 import json
-import math
 import shutil
 import numpy as np
 import cv2
@@ -30,6 +29,14 @@ from tqdm import tqdm
 from pathlib import Path
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
+
+from sensor_geometry import (
+    DEFAULT_CALIBRATION_PATH,
+    create_semantic_kitti_calibration,
+    load_calibration,
+    project_point_to_image,
+    transform_points,
+)
 
 
 def read_asc_pointcloud(filepath):
@@ -47,27 +54,11 @@ def read_asc_pointcloud(filepath):
     return np.array(points, dtype=np.float32)
 
 
-def transform_lidar_to_camera_frame(point):
-    """Transform a point from LiDAR frame to camera frame (identity here)."""
-    return point + np.array([0, 0, 0])
-
-
-def project_point_to_image(point, image_width, image_height):
-    """Project a 3D point onto the image plane. Returns (u, v) or None."""
-    fov_rad = math.radians(50)
-    focal_length = (image_width / 2) / math.tan(fov_rad / 2)
-
-    if point[0] <= 0:
-        return None
-
-    cx = image_width / 2
-    cy = image_height / 2
-    u = int(focal_length * point[1] / point[0] + cx)
-    v = int(focal_length * point[2] / point[0] + cy)
-
-    if 0 <= u < image_width and 0 <= v < image_height:
-        return (u, v)
-    return None
+def transform_lidar_to_camera_frame(point, lidar_to_camera=None):
+    """Transform a point with an explicit LiDAR-to-camera calibration."""
+    if lidar_to_camera is None:
+        lidar_to_camera, _ = load_calibration(DEFAULT_CALIBRATION_PATH)
+    return transform_points(point, lidar_to_camera)
 
 
 def get_label_from_segmentation(seg_image, u, v):
@@ -98,8 +89,12 @@ def get_label_from_segmentation(seg_image, u, v):
 
 
 def convert_trajectory_to_kitti(pointcloud_dir, seg_dir, img_dir,
-                                 output_bin_dir, output_label_dir, output_img_dir):
+                                 output_bin_dir, output_label_dir, output_img_dir,
+                                 lidar_to_camera=None):
     """Convert one trajectory from AirSim format to Semantic-KITTI format."""
+    if lidar_to_camera is None:
+        lidar_to_camera, _ = load_calibration(DEFAULT_CALIBRATION_PATH)
+
     os.makedirs(output_bin_dir, exist_ok=True)
     os.makedirs(output_label_dir, exist_ok=True)
     os.makedirs(output_img_dir, exist_ok=True)
@@ -123,8 +118,8 @@ def convert_trajectory_to_kitti(pointcloud_dir, seg_dir, img_dir,
         labels = np.zeros(len(points), dtype=np.uint32)
         valid_indices = []
 
-        for i, point in enumerate(points):
-            camera_point = transform_lidar_to_camera_frame(point)
+        camera_points = transform_points(points, lidar_to_camera)
+        for i, camera_point in enumerate(camera_points):
             projection = project_point_to_image(camera_point, width, height)
             label = None
             if projection:
@@ -148,11 +143,11 @@ def convert_trajectory_to_kitti(pointcloud_dir, seg_dir, img_dir,
         labels.tofile(os.path.join(output_label_dir, f"{file_id}.label"))
 
 
-def create_default_calib():
-    """Return default calib.txt content for the SpaceSense camera."""
-    return """P2: 1097.98754330 0 512.0 0 0 1097.98754330 512.0 0 0 0 1 0
-Tr: 0 1 0 0 0 0 1 0 1 0 0 0
-"""
+def create_default_calib(lidar_to_camera=None):
+    """Return calib.txt content using the selected sensor extrinsics."""
+    if lidar_to_camera is None:
+        lidar_to_camera, _ = load_calibration(DEFAULT_CALIBRATION_PATH)
+    return create_semantic_kitti_calibration(lidar_to_camera)
 
 
 def extract_satellite_name(folder_name):
@@ -214,7 +209,13 @@ def _get_satellite_folders(raw_data_root):
     return satellite_folders
 
 
-def process_single_satellite(satellite_folder, raw_data_root, sequences_dir, seq_id):
+def process_single_satellite(
+    satellite_folder,
+    raw_data_root,
+    sequences_dir,
+    seq_id,
+    calibration_path=DEFAULT_CALIBRATION_PATH,
+):
     """Process one satellite (used for parallel execution).
 
     Returns:
@@ -222,6 +223,7 @@ def process_single_satellite(satellite_folder, raw_data_root, sequences_dir, seq
     """
     try:
         satellite_name = extract_satellite_name(satellite_folder.name)
+        lidar_to_camera, _ = load_calibration(calibration_path)
 
         seq_dir = sequences_dir / seq_id
         velodyne_dir = seq_dir / "velodyne"
@@ -233,7 +235,7 @@ def process_single_satellite(satellite_folder, raw_data_root, sequences_dir, seq
         image_dir.mkdir(parents=True, exist_ok=True)
 
         with open(seq_dir / "calib.txt", 'w') as f:
-            f.write(create_default_calib())
+            f.write(create_default_calib(lidar_to_camera))
 
         trajectory_dirs = sorted([
             d for d in satellite_folder.iterdir()
@@ -264,7 +266,8 @@ def process_single_satellite(satellite_folder, raw_data_root, sequences_dir, seq
             try:
                 convert_trajectory_to_kitti(
                     str(src_pointcloud), str(src_seg), str(src_img),
-                    str(temp_velodyne), str(temp_labels), str(temp_images)
+                    str(temp_velodyne), str(temp_labels), str(temp_images),
+                    lidar_to_camera=lidar_to_camera,
                 )
 
                 for bin_file in sorted(temp_velodyne.glob("*.bin")):
@@ -296,10 +299,16 @@ def process_single_satellite(satellite_folder, raw_data_root, sequences_dir, seq
         return (seq_id, extract_satellite_name(satellite_folder.name), 0, f"error: {str(e)}")
 
 
-def convert_airsim_to_kitti_sequences(raw_data_root, output_root, json_path=None):
+def convert_airsim_to_kitti_sequences(
+    raw_data_root,
+    output_root,
+    json_path=None,
+    calibration_path=DEFAULT_CALIBRATION_PATH,
+):
     """Serial conversion: one satellite per sequence."""
     raw_data_root = Path(raw_data_root)
     output_root   = Path(output_root)
+    lidar_to_camera, _ = load_calibration(calibration_path)
 
     sequences_dir = output_root / "sequences"
     sequences_dir.mkdir(parents=True, exist_ok=True)
@@ -335,7 +344,7 @@ def convert_airsim_to_kitti_sequences(raw_data_root, output_root, json_path=None
         image_dir.mkdir(parents=True, exist_ok=True)
 
         with open(seq_dir / "calib.txt", 'w') as f:
-            f.write(create_default_calib())
+            f.write(create_default_calib(lidar_to_camera))
 
         trajectory_dirs = sorted([
             d for d in satellite_folder.iterdir()
@@ -372,7 +381,8 @@ def convert_airsim_to_kitti_sequences(raw_data_root, output_root, json_path=None
             try:
                 convert_trajectory_to_kitti(
                     str(src_pointcloud), str(src_seg), str(src_img),
-                    str(temp_velodyne), str(temp_labels), str(temp_images)
+                    str(temp_velodyne), str(temp_labels), str(temp_images),
+                    lidar_to_camera=lidar_to_camera,
                 )
 
                 bin_files = sorted(temp_velodyne.glob("*.bin"))
@@ -406,10 +416,18 @@ def convert_airsim_to_kitti_sequences(raw_data_root, output_root, json_path=None
     return sequence_mapping
 
 
-def convert_airsim_to_kitti_sequences_parallel(raw_data_root, output_root, max_workers=None, json_path=None):
+def convert_airsim_to_kitti_sequences_parallel(
+    raw_data_root,
+    output_root,
+    max_workers=None,
+    json_path=None,
+    calibration_path=DEFAULT_CALIBRATION_PATH,
+):
     """Parallel conversion: one satellite per sequence."""
     raw_data_root = Path(raw_data_root)
     output_root   = Path(output_root)
+    calibration_path = str(Path(calibration_path).expanduser().resolve())
+    load_calibration(calibration_path)  # Validate before starting worker processes.
 
     sequences_dir = output_root / "sequences"
     sequences_dir.mkdir(parents=True, exist_ok=True)
@@ -440,7 +458,11 @@ def convert_airsim_to_kitti_sequences_parallel(raw_data_root, output_root, max_w
             seq_id = f"{seq_idx:02d}"
             future = executor.submit(
                 process_single_satellite,
-                satellite_folder, raw_data_root, sequences_dir, seq_id
+                satellite_folder,
+                raw_data_root,
+                sequences_dir,
+                seq_id,
+                calibration_path,
             )
             futures[future] = seq_id
 
@@ -486,11 +508,23 @@ if __name__ == "__main__":
                         help="Number of parallel workers (default: 2/3 of CPU cores)")
     parser.add_argument("--serial", action="store_true",
                         help="Use serial processing (slower, but easier to debug)")
+    parser.add_argument(
+        "--calibration",
+        type=str,
+        default=str(DEFAULT_CALIBRATION_PATH),
+        help=(
+            "LiDAR-to-camera calibration JSON "
+            f"(default: {DEFAULT_CALIBRATION_PATH})"
+        ),
+    )
     args = parser.parse_args()
 
     raw_data_root = args.raw_data
     output_root   = args.output
     json_path     = args.satellite_json
+    calibration_path = str(Path(args.calibration).expanduser().resolve())
+    lidar_to_camera, calibration_metadata = load_calibration(calibration_path)
+    calibration_id = calibration_metadata.get("calibration_id", "unnamed")
 
     print("=" * 60)
     mode = "serial" if args.serial else "parallel"
@@ -499,16 +533,28 @@ if __name__ == "__main__":
     print(f"Source:    {raw_data_root}")
     print(f"Output:    {output_root}")
     print(f"JSON ref:  {json_path}")
+    print(f"Calibration: {calibration_id} ({calibration_path})")
+    print("T_camera_from_lidar:")
+    print(lidar_to_camera)
     print("=" * 60)
 
     start_time = time.time()
 
     if args.serial:
-        sequence_mapping = convert_airsim_to_kitti_sequences(raw_data_root, output_root, json_path)
+        sequence_mapping = convert_airsim_to_kitti_sequences(
+            raw_data_root,
+            output_root,
+            json_path,
+            calibration_path,
+        )
         results = [(seq_id, name, 0, "ok") for seq_id, name in sequence_mapping.items()]
     else:
         sequence_mapping, results = convert_airsim_to_kitti_sequences_parallel(
-            raw_data_root, output_root, max_workers=args.workers, json_path=json_path
+            raw_data_root,
+            output_root,
+            max_workers=args.workers,
+            json_path=json_path,
+            calibration_path=calibration_path,
         )
 
     if not args.serial:
